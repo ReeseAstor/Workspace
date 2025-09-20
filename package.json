@@ -1,0 +1,22 @@
+{
+  "name": "commodities-credit-workspace",
+  "version": "1.0.0",
+  "description": "A credit analysis workspace for commodities trading companies and novel planning tool",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": ["credit-analysis", "commodities", "trading", "novel-planning", "workspace"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "multer": "^1.4.5-lts.1",
+    "body-parser": "^1.20.2",
+    "path": "^0.12.7",
+    "fs": "^0.0.1-security"
+  }
+}
