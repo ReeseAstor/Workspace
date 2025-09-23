@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Credit Analysis & Novel Planning Workspace</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Workspace</h1>
+            <nav>
+                <button id="credit-tab" class="nav-button active">Credit Analysis</button>
+                <button id="novel-tab" class="nav-button">Novel Planning</button>
+            </nav>
+        </header>
+
+        <!-- Credit Analysis Section -->
+        <div id="credit-section" class="section active">
+            <h2>Credit Analysis for Commodities Trading</h2>
+            
+            <div class="card">
+                <h3>Companies Management</h3>
+                <form id="company-form">
+                    <input type="text" id="company-name" placeholder="Company Name" required>
+                    <input type="text" id="company-industry" placeholder="Industry" required>
+                    <button type="submit">Add Company</button>
+                </form>
+                <div id="companies-list"></div>
+            </div>
+
+            <div class="card">
+                <h3>Financial Document Upload (OCR)</h3>
+                <form id="upload-form" enctype="multipart/form-data">
+                    <select id="upload-company" required>
+                        <option value="">Select Company</option>
+                    </select>
+                    <select id="document-type" required>
+                        <option value="">Document Type</option>
+                        <option value="financial_statement">Financial Statement</option>
+                        <option value="balance_sheet">Balance Sheet</option>
+                        <option value="cash_flow">Cash Flow Statement</option>
+                        <option value="income_statement">Income Statement</option>
+                    </select>
+                    <input type="file" id="financial-document" accept=".pdf,.jpg,.png,.jpeg" required>
+                    <button type="submit">Upload & Process</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>Credit Memo Generation</h3>
+                <form id="memo-form">
+                    <select id="memo-company" required>
+                        <option value="">Select Company</option>
+                    </select>
+                    <select id="memo-type" required>
+                        <option value="">Memo Type</option>
+                        <option value="annual_review">Annual Review</option>
+                        <option value="refinancing">Refinancing</option>
+                        <option value="new_deal">New Deal</option>
+                        <option value="amendment">Amendment</option>
+                    </select>
+                    <input type="text" id="memo-title" placeholder="Memo Title" required>
+                    <textarea id="memo-content" placeholder="Memo Content" rows="5" required></textarea>
+                    <textarea id="memo-metrics" placeholder="Financial Metrics (JSON format)" rows="3"></textarea>
+                    <button type="submit">Generate Credit Memo</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Novel Planning Section -->
+        <div id="novel-section" class="section">
+            <h2>Novel Planning & Story Development</h2>
+            
+            <div class="card">
+                <h3>Novel Projects</h3>
+                <form id="novel-form">
+                    <input type="text" id="novel-title" placeholder="Novel Title" required>
+                    <textarea id="novel-description" placeholder="Novel Description" rows="3"></textarea>
+                    <select id="novel-pov">
+                        <option value="dual_alternating">Dual POV (Alternating)</option>
+                        <option value="single">Single POV</option>
+                        <option value="multiple">Multiple POV</option>
+                    </select>
+                    <select id="novel-tense">
+                        <option value="past">Past Tense</option>
+                        <option value="present">Present Tense</option>
+                    </select>
+                    <input type="number" id="target-chapters" value="25" min="1" max="100">
+                    <label for="target-chapters">Target Chapters</label>
+                    <input type="number" id="target-beats" value="250" min="1" max="1000">
+                    <label for="target-beats">Target Story Beats</label>
+                    <button type="submit">Create Novel Project</button>
+                </form>
+                <div id="novels-list"></div>
+            </div>
+
+            <div class="card">
+                <h3>Chapter Management</h3>
+                <div id="chapter-section" style="display: none;">
+                    <form id="chapter-form">
+                        <input type="hidden" id="chapter-novel-id">
+                        <input type="number" id="chapter-number" placeholder="Chapter Number" required>
+                        <input type="text" id="chapter-title" placeholder="Chapter Title" required>
+                        <input type="text" id="chapter-pov" placeholder="POV Character" required>
+                        <textarea id="chapter-summary" placeholder="Chapter Summary" rows="4"></textarea>
+                        <button type="submit">Add Chapter</button>
+                    </form>
+                    <div id="chapters-list"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Story Beats Tracking</h3>
+                <div id="beats-section" style="display: none;">
+                    <form id="beat-form">
+                        <input type="hidden" id="beat-novel-id">
+                        <select id="beat-chapter">
+                            <option value="">Select Chapter</option>
+                        </select>
+                        <input type="number" id="beat-number" placeholder="Beat Number" required>
+                        <textarea id="beat-description" placeholder="Beat Description" rows="3" required></textarea>
+                        <select id="beat-type">
+                            <option value="setup">Setup</option>
+                            <option value="inciting_incident">Inciting Incident</option>
+                            <option value="rising_action">Rising Action</option>
+                            <option value="climax">Climax</option>
+                            <option value="falling_action">Falling Action</option>
+                            <option value="resolution">Resolution</option>
+                        </select>
+                        <input type="text" id="beat-pov" placeholder="POV Character" required>
+                        <button type="submit">Add Story Beat</button>
+                    </form>
+                    <div id="beats-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
