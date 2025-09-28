@@ -41,7 +41,7 @@ function switchTab(tab) {
 // Credit Analysis Functions
 async function loadCompanies() {
     try {
-        const response = await fetch('/api/companies');
+        const response = await authenticatedFetch('/api/companies');
         companies = await response.json();
         renderCompanies();
         updateCompanySelects();
@@ -57,6 +57,9 @@ function renderCompanies() {
             <h4>${company.name}</h4>
             <p>Industry: ${company.industry || 'Not specified'}</p>
             <p>Added: ${new Date(company.created_at).toLocaleDateString()}</p>
+            ${company.notion_page_id ? '<span class="sync-badge notion">📝 Notion</span>' : ''}
+            ${company.google_drive_folder_id ? '<span class="sync-badge drive">📁 Drive</span>' : ''}
+            <button onclick="showSyncStatus('company', '${company.id}')" class="sync-btn">Sync Status</button>
         </div>
     `).join('');
 }
@@ -76,18 +79,20 @@ async function handleCompanySubmit(e) {
     const industry = document.getElementById('company-industry').value;
 
     try {
-        const response = await fetch('/api/companies', {
+        const response = await authenticatedFetch('/api/companies', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, industry })
         });
 
         if (response.ok) {
-            showSuccess('Company added successfully!');
+            const result = await response.json();
+            showSuccess(result.message || 'Company added successfully!');
             document.getElementById('company-form').reset();
             loadCompanies();
         } else {
-            throw new Error('Failed to add company');
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to add company');
         }
     } catch (error) {
         showError('Error adding company: ' + error.message);
@@ -102,16 +107,21 @@ async function handleFileUpload(e) {
     formData.append('document', document.getElementById('financial-document').files[0]);
 
     try {
-        const response = await fetch('/api/upload-financial', {
+        const response = await authenticatedFetch('/api/upload-financial', {
             method: 'POST',
             body: formData
         });
 
         if (response.ok) {
-            showSuccess('Financial document uploaded and processed successfully!');
+            const result = await response.json();
+            const message = result.google_drive_backup ? 
+                'Financial document uploaded, processed, and backed up to Google Drive!' :
+                'Financial document uploaded and processed successfully!';
+            showSuccess(message);
             document.getElementById('upload-form').reset();
         } else {
-            throw new Error('Failed to upload document');
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to upload document');
         }
     } catch (error) {
         showError('Error uploading document: ' + error.message);
@@ -129,17 +139,19 @@ async function handleMemoSubmit(e) {
     };
 
     try {
-        const response = await fetch('/api/credit-memos', {
+        const response = await authenticatedFetch('/api/credit-memos', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(memoData)
         });
 
         if (response.ok) {
-            showSuccess('Credit memo created successfully!');
+            const result = await response.json();
+            showSuccess(result.message || 'Credit memo created successfully!');
             document.getElementById('memo-form').reset();
         } else {
-            throw new Error('Failed to create credit memo');
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to create credit memo');
         }
     } catch (error) {
         showError('Error creating credit memo: ' + error.message);
@@ -149,7 +161,7 @@ async function handleMemoSubmit(e) {
 // Novel Planning Functions
 async function loadNovels() {
     try {
-        const response = await fetch('/api/novels');
+        const response = await authenticatedFetch('/api/novels');
         novels = await response.json();
         renderNovels();
     } catch (error) {
@@ -165,7 +177,10 @@ function renderNovels() {
             <p>${novel.description || 'No description'}</p>
             <p>POV: ${novel.pov_style} | Tense: ${novel.tense}</p>
             <p>Target: ${novel.target_chapters} chapters, ${novel.target_beats} beats</p>
-            <button onclick="selectNovel(${novel.id})">Work on This Novel</button>
+            ${novel.notion_page_id ? '<span class="sync-badge notion">📝 Notion</span>' : ''}
+            ${novel.google_drive_folder_id ? '<span class="sync-badge drive">📁 Drive</span>' : ''}
+            <button onclick="selectNovel('${novel.id}')">Work on This Novel</button>
+            <button onclick="showSyncStatus('novel', '${novel.id}')" class="sync-btn">Sync Status</button>
         </div>
     `).join('');
 }
@@ -191,7 +206,7 @@ async function selectNovel(novelId) {
 
 async function loadChapters(novelId) {
     try {
-        const response = await fetch(`/api/novels/${novelId}/chapters`);
+        const response = await authenticatedFetch(`/api/novels/${novelId}/chapters`);
         const chapters = await response.json();
         renderChapters(chapters);
         updateChapterSelect(chapters);
@@ -207,6 +222,8 @@ function renderChapters(chapters) {
             <h4>Chapter ${chapter.chapter_number}: ${chapter.title}</h4>
             <p>POV: ${chapter.pov_character}</p>
             <p>${chapter.summary || 'No summary'}</p>
+            ${chapter.google_drive_backup_id ? '<span class="sync-badge drive">📁 Backed up</span>' : ''}
+            ${chapter.word_count > 0 ? `<p>Word count: ${chapter.word_count}</p>` : ''}
         </div>
     `).join('');
 }
@@ -219,7 +236,7 @@ function updateChapterSelect(chapters) {
 
 async function loadBeats(novelId) {
     try {
-        const response = await fetch(`/api/novels/${novelId}/beats`);
+        const response = await authenticatedFetch(`/api/novels/${novelId}/beats`);
         const beats = await response.json();
         renderBeats(beats);
     } catch (error) {
@@ -250,18 +267,20 @@ async function handleNovelSubmit(e) {
     };
 
     try {
-        const response = await fetch('/api/novels', {
+        const response = await authenticatedFetch('/api/novels', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(novelData)
         });
 
         if (response.ok) {
-            showSuccess('Novel project created successfully!');
+            const result = await response.json();
+            showSuccess(result.message || 'Novel project created successfully!');
             document.getElementById('novel-form').reset();
             loadNovels();
         } else {
-            throw new Error('Failed to create novel project');
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to create novel project');
         }
     } catch (error) {
         showError('Error creating novel project: ' + error.message);
@@ -279,18 +298,20 @@ async function handleChapterSubmit(e) {
     };
 
     try {
-        const response = await fetch('/api/chapters', {
+        const response = await authenticatedFetch('/api/chapters', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(chapterData)
         });
 
         if (response.ok) {
-            showSuccess('Chapter added successfully!');
+            const result = await response.json();
+            showSuccess(result.message || 'Chapter added successfully!');
             document.getElementById('chapter-form').reset();
             loadChapters(currentNovelId);
         } else {
-            throw new Error('Failed to add chapter');
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to add chapter');
         }
     } catch (error) {
         showError('Error adding chapter: ' + error.message);
@@ -309,7 +330,7 @@ async function handleBeatSubmit(e) {
     };
 
     try {
-        const response = await fetch('/api/beats', {
+        const response = await authenticatedFetch('/api/beats', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(beatData)
@@ -359,4 +380,82 @@ function parseJSON(str) {
     } catch {
         return {};
     }
+}
+
+// Sync status functions
+async function showSyncStatus(entityType, entityId) {
+    try {
+        const response = await authenticatedFetch(`/api/sync-status/${entityType}/${entityId}`);
+        const status = await response.json();
+        
+        let statusHtml = `<h3>Sync Status for ${entityType}</h3>`;
+        
+        Object.keys(status).forEach(service => {
+            const serviceStatus = status[service];
+            const statusIcon = serviceStatus.status === 'success' ? '✅' : 
+                             serviceStatus.status === 'failed' ? '❌' : '⏳';
+            
+            statusHtml += `
+                <div class="sync-status-item">
+                    <strong>${service}:</strong> ${statusIcon} ${serviceStatus.status}
+                    ${serviceStatus.error_message ? `<br><small>Error: ${serviceStatus.error_message}</small>` : ''}
+                    <br><small>Last updated: ${new Date(serviceStatus.created_at).toLocaleString()}</small>
+                </div>
+            `;
+        });
+        
+        statusHtml += `<button onclick="manualSync('${entityType}', '${entityId}')">Force Sync</button>`;
+        statusHtml += `<button onclick="hideSyncStatus()">Close</button>`;
+        
+        showModal('Sync Status', statusHtml);
+    } catch (error) {
+        showError('Failed to load sync status: ' + error.message);
+    }
+}
+
+async function manualSync(entityType, entityId) {
+    try {
+        const response = await authenticatedFetch(`/api/sync/${entityType}/${entityId}`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showSuccess(result.message || 'Manual sync completed');
+            setTimeout(() => showSyncStatus(entityType, entityId), 1000); // Refresh status
+        } else {
+            throw new Error(result.error || 'Manual sync failed');
+        }
+    } catch (error) {
+        showError('Manual sync failed: ' + error.message);
+    }
+}
+
+function showModal(title, content) {
+    const modal = document.getElementById('sync-modal') || createSyncModal();
+    document.getElementById('sync-modal-title').textContent = title;
+    document.getElementById('sync-modal-content').innerHTML = content;
+    modal.style.display = 'block';
+}
+
+function hideSyncStatus() {
+    const modal = document.getElementById('sync-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function createSyncModal() {
+    const modal = document.createElement('div');
+    modal.id = 'sync-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <h2 id="sync-modal-title"></h2>
+            <div id="sync-modal-content"></div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    return modal;
 }

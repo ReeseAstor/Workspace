@@ -4,11 +4,21 @@ const multer = require('multer');
 const bodyParser = require('body-parser');
 const path = require('path');
 const fs = require('fs');
+const cors = require('cors');
+require('dotenv').config();
+
+// Import configurations and services
+const { supabase, supabaseAdmin } = require('./config/supabase');
+const { notion, notionHelpers } = require('./config/notion');
+const { oauth2Client, googleDriveHelpers } = require('./config/googleDrive');
+const { authenticateToken, optionalAuth } = require('./middleware/auth');
+const syncService = require('./services/syncService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
+app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
@@ -101,124 +111,469 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Authentication Routes
+app.post('/auth/signup', async (req, res) => {
+    try {
+        const { email, password, fullName } = req.body;
+        
+        const { data, error } = await supabaseAdmin.auth.admin.createUser({
+            email,
+            password,
+            user_metadata: { full_name: fullName },
+            email_confirm: true
+        });
+
+        if (error) throw error;
+
+        res.json({ user: data.user, message: 'User created successfully' });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+app.post('/auth/signin', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password
+        });
+
+        if (error) throw error;
+
+        res.json({ user: data.user, session: data.session });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+app.post('/auth/signout', authenticateToken, async (req, res) => {
+    try {
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
+        
+        res.json({ message: 'Signed out successfully' });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Google OAuth Routes
+app.get('/auth/google', (req, res) => {
+    const authUrl = googleDriveHelpers.getAuthUrl();
+    res.json({ authUrl });
+});
+
+app.get('/auth/google/callback', authenticateToken, async (req, res) => {
+    try {
+        const { code } = req.query;
+        const tokens = await googleDriveHelpers.getTokens(code);
+        
+        // Store tokens in user profile
+        const { error } = await supabaseAdmin
+            .from('profiles')
+            .update({ google_tokens: tokens })
+            .eq('id', req.user.id);
+
+        if (error) throw error;
+
+        res.redirect('/?google_auth=success');
+    } catch (error) {
+        res.redirect('/?google_auth=error');
+    }
+});
+
+// User profile routes
+app.get('/api/profile', authenticateToken, async (req, res) => {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('profiles')
+            .select('*')
+            .eq('id', req.user.id)
+            .single();
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.put('/api/profile', authenticateToken, async (req, res) => {
+    try {
+        const { full_name, notion_workspace_id } = req.body;
+        
+        const { data, error } = await supabaseAdmin
+            .from('profiles')
+            .update({ 
+                full_name,
+                notion_workspace_id,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', req.user.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Credit Analysis Routes
-app.get('/api/companies', (req, res) => {
-    db.all('SELECT * FROM companies ORDER BY name', (err, rows) => {
-        if (err) {
-            res.status(500).json({ error: err.message });
-        } else {
-            res.json(rows);
-        }
-    });
+app.get('/api/companies', authenticateToken, async (req, res) => {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('companies')
+            .select('*')
+            .eq('user_id', req.user.id)
+            .order('name');
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.post('/api/companies', (req, res) => {
-    const { name, industry } = req.body;
-    db.run('INSERT INTO companies (name, industry) VALUES (?, ?)', [name, industry], function(err) {
-        if (err) {
-            res.status(500).json({ error: err.message });
-        } else {
-            res.json({ id: this.lastID, name, industry });
-        }
-    });
+app.post('/api/companies', authenticateToken, async (req, res) => {
+    try {
+        const { name, industry } = req.body;
+        
+        const { data, error } = await supabaseAdmin
+            .from('companies')
+            .insert({
+                name,
+                industry,
+                user_id: req.user.id
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // Sync to external services
+        const syncResults = await syncService.syncCompany(req.user.id, data);
+        
+        res.json({ 
+            ...data, 
+            sync_status: syncResults,
+            message: 'Company created and syncing to external services' 
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.post('/api/upload-financial', upload.single('document'), (req, res) => {
-    const { company_id, document_type } = req.body;
-    const file_path = req.file.path;
-    
-    // Basic OCR simulation - in a real implementation, you'd use tesseract.js or similar
-    const extracted_data = `Extracted financial data from ${req.file.originalname}`;
-    
-    db.run('INSERT INTO financial_data (company_id, document_type, file_path, extracted_data) VALUES (?, ?, ?, ?)', 
-           [company_id, document_type, file_path, extracted_data], function(err) {
-        if (err) {
-            res.status(500).json({ error: err.message });
-        } else {
-            res.json({ id: this.lastID, message: 'Financial document uploaded and processed' });
+app.post('/api/upload-financial', authenticateToken, upload.single('document'), async (req, res) => {
+    try {
+        const { company_id, document_type } = req.body;
+        const file_path = req.file.path;
+        
+        // Basic OCR simulation - in a real implementation, you'd use tesseract.js or similar
+        const extracted_data = `Extracted financial data from ${req.file.originalname}`;
+        
+        // Get company info for Google Drive upload
+        const { data: company, error: companyError } = await supabaseAdmin
+            .from('companies')
+            .select('name')
+            .eq('id', company_id)
+            .eq('user_id', req.user.id)
+            .single();
+
+        if (companyError) throw companyError;
+
+        let googleDriveResult = null;
+        
+        // Upload to Google Drive if user has connected their account
+        try {
+            const { data: profile } = await supabaseAdmin
+                .from('profiles')
+                .select('google_tokens')
+                .eq('id', req.user.id)
+                .single();
+
+            if (profile?.google_tokens) {
+                googleDriveHelpers.setCredentials(profile.google_tokens);
+                googleDriveResult = await googleDriveHelpers.uploadFinancialDocument(
+                    file_path,
+                    req.file.originalname,
+                    company.name,
+                    document_type
+                );
+            }
+        } catch (driveError) {
+            console.error('Google Drive upload failed:', driveError);
+            // Continue without Google Drive upload
         }
-    });
+
+        // Store in Supabase
+        const { data, error } = await supabaseAdmin
+            .from('financial_data')
+            .insert({
+                company_id,
+                user_id: req.user.id,
+                document_type,
+                original_filename: req.file.originalname,
+                file_path,
+                google_drive_file_id: googleDriveResult?.id,
+                google_drive_link: googleDriveResult?.webViewLink,
+                extracted_data
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        res.json({ 
+            ...data, 
+            google_drive_backup: googleDriveResult ? true : false,
+            message: 'Financial document uploaded and processed' 
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.post('/api/credit-memos', (req, res) => {
-    const { company_id, memo_type, title, content, financial_metrics } = req.body;
-    db.run('INSERT INTO credit_memos (company_id, memo_type, title, content, financial_metrics) VALUES (?, ?, ?, ?, ?)', 
-           [company_id, memo_type, title, content, JSON.stringify(financial_metrics)], function(err) {
-        if (err) {
-            res.status(500).json({ error: err.message });
-        } else {
-            res.json({ id: this.lastID, message: 'Credit memo created' });
-        }
-    });
+app.post('/api/credit-memos', authenticateToken, async (req, res) => {
+    try {
+        const { company_id, memo_type, title, content, financial_metrics } = req.body;
+        
+        // Get company name for Notion sync
+        const { data: company, error: companyError } = await supabaseAdmin
+            .from('companies')
+            .select('name')
+            .eq('id', company_id)
+            .eq('user_id', req.user.id)
+            .single();
+
+        if (companyError) throw companyError;
+
+        const { data, error } = await supabaseAdmin
+            .from('credit_memos')
+            .insert({
+                company_id,
+                user_id: req.user.id,
+                memo_type,
+                title,
+                content,
+                financial_metrics: typeof financial_metrics === 'string' ? JSON.parse(financial_metrics) : financial_metrics
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // Sync to external services
+        const syncResults = await syncService.syncCreditMemo(req.user.id, data, company.name);
+        
+        res.json({ 
+            ...data, 
+            sync_status: syncResults,
+            message: 'Credit memo created and syncing to external services' 
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Novel Planning Routes
-app.get('/api/novels', (req, res) => {
-    db.all('SELECT * FROM novels ORDER BY created_at DESC', (err, rows) => {
-        if (err) {
-            res.status(500).json({ error: err.message });
-        } else {
-            res.json(rows);
-        }
-    });
+app.get('/api/novels', authenticateToken, async (req, res) => {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('novels')
+            .select('*')
+            .eq('user_id', req.user.id)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.post('/api/novels', (req, res) => {
-    const { title, description, pov_style, tense, target_chapters, target_beats } = req.body;
-    db.run('INSERT INTO novels (title, description, pov_style, tense, target_chapters, target_beats) VALUES (?, ?, ?, ?, ?, ?)', 
-           [title, description, pov_style || 'dual_alternating', tense || 'past', target_chapters || 25, target_beats || 250], function(err) {
-        if (err) {
-            res.status(500).json({ error: err.message });
-        } else {
-            res.json({ id: this.lastID, title, description });
-        }
-    });
+app.post('/api/novels', authenticateToken, async (req, res) => {
+    try {
+        const { title, description, pov_style, tense, target_chapters, target_beats } = req.body;
+        
+        const { data, error } = await supabaseAdmin
+            .from('novels')
+            .insert({
+                title,
+                description,
+                pov_style: pov_style || 'dual_alternating',
+                tense: tense || 'past',
+                target_chapters: target_chapters || 25,
+                target_beats: target_beats || 250,
+                user_id: req.user.id
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // Sync to external services
+        const syncResults = await syncService.syncNovel(req.user.id, data);
+        
+        res.json({ 
+            ...data, 
+            sync_status: syncResults,
+            message: 'Novel created and syncing to external services' 
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.get('/api/novels/:id/chapters', (req, res) => {
-    const novel_id = req.params.id;
-    db.all('SELECT * FROM chapters WHERE novel_id = ? ORDER BY chapter_number', [novel_id], (err, rows) => {
-        if (err) {
-            res.status(500).json({ error: err.message });
-        } else {
-            res.json(rows);
-        }
-    });
+app.get('/api/novels/:id/chapters', authenticateToken, async (req, res) => {
+    try {
+        const novel_id = req.params.id;
+        
+        const { data, error } = await supabaseAdmin
+            .from('chapters')
+            .select('*')
+            .eq('novel_id', novel_id)
+            .eq('user_id', req.user.id)
+            .order('chapter_number');
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.post('/api/chapters', (req, res) => {
-    const { novel_id, chapter_number, title, pov_character, summary } = req.body;
-    db.run('INSERT INTO chapters (novel_id, chapter_number, title, pov_character, summary) VALUES (?, ?, ?, ?, ?)', 
-           [novel_id, chapter_number, title, pov_character, summary], function(err) {
-        if (err) {
-            res.status(500).json({ error: err.message });
-        } else {
-            res.json({ id: this.lastID, novel_id, chapter_number, title });
+app.post('/api/chapters', authenticateToken, async (req, res) => {
+    try {
+        const { novel_id, chapter_number, title, pov_character, summary, content } = req.body;
+        
+        const { data, error } = await supabaseAdmin
+            .from('chapters')
+            .insert({
+                novel_id,
+                chapter_number,
+                title,
+                pov_character,
+                summary,
+                content,
+                user_id: req.user.id
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // Backup to Google Drive if content is provided
+        if (content) {
+            try {
+                const { data: novel } = await supabaseAdmin
+                    .from('novels')
+                    .select('title')
+                    .eq('id', novel_id)
+                    .single();
+                
+                await syncService.backupChapter(req.user.id, data, novel.title);
+            } catch (backupError) {
+                console.error('Chapter backup failed:', backupError);
+            }
         }
-    });
+
+        res.json({ 
+            ...data, 
+            message: 'Chapter created' + (content ? ' and backed up to Google Drive' : '')
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.get('/api/novels/:id/beats', (req, res) => {
-    const novel_id = req.params.id;
-    db.all('SELECT * FROM story_beats WHERE novel_id = ? ORDER BY beat_number', [novel_id], (err, rows) => {
-        if (err) {
-            res.status(500).json({ error: err.message });
-        } else {
-            res.json(rows);
-        }
-    });
+app.get('/api/novels/:id/beats', authenticateToken, async (req, res) => {
+    try {
+        const novel_id = req.params.id;
+        
+        const { data, error } = await supabaseAdmin
+            .from('story_beats')
+            .select('*')
+            .eq('novel_id', novel_id)
+            .eq('user_id', req.user.id)
+            .order('beat_number');
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.post('/api/beats', (req, res) => {
-    const { novel_id, chapter_id, beat_number, description, beat_type, pov_character } = req.body;
-    db.run('INSERT INTO story_beats (novel_id, chapter_id, beat_number, description, beat_type, pov_character) VALUES (?, ?, ?, ?, ?, ?)', 
-           [novel_id, chapter_id, beat_number, description, beat_type, pov_character], function(err) {
-        if (err) {
-            res.status(500).json({ error: err.message });
-        } else {
-            res.json({ id: this.lastID, novel_id, beat_number, description });
+app.post('/api/beats', authenticateToken, async (req, res) => {
+    try {
+        const { novel_id, chapter_id, beat_number, description, beat_type, pov_character } = req.body;
+        
+        const { data, error } = await supabaseAdmin
+            .from('story_beats')
+            .insert({
+                novel_id,
+                chapter_id,
+                beat_number,
+                description,
+                beat_type,
+                pov_character,
+                user_id: req.user.id
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Sync status endpoint
+app.get('/api/sync-status/:entity_type/:entity_id', authenticateToken, async (req, res) => {
+    try {
+        const { entity_type, entity_id } = req.params;
+        const status = await syncService.getSyncStatus(req.user.id, entity_type, entity_id);
+        res.json(status);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Manual sync trigger
+app.post('/api/sync/:entity_type/:entity_id', authenticateToken, async (req, res) => {
+    try {
+        const { entity_type, entity_id } = req.params;
+        let syncResults = {};
+        
+        if (entity_type === 'company') {
+            const { data: company } = await supabaseAdmin
+                .from('companies')
+                .select('*')
+                .eq('id', entity_id)
+                .eq('user_id', req.user.id)
+                .single();
+            
+            syncResults = await syncService.syncCompany(req.user.id, company, 'update');
+        } else if (entity_type === 'novel') {
+            const { data: novel } = await supabaseAdmin
+                .from('novels')
+                .select('*')
+                .eq('id', entity_id)
+                .eq('user_id', req.user.id)
+                .single();
+            
+            syncResults = await syncService.syncNovel(req.user.id, novel, 'update');
         }
-    });
+        
+        res.json({ sync_results: syncResults, message: 'Manual sync completed' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Start server
