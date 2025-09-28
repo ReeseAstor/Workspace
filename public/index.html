@@ -13,6 +13,7 @@
             <nav>
                 <button id="credit-tab" class="nav-button active">Credit Analysis</button>
                 <button id="novel-tab" class="nav-button">Novel Planning</button>
+                <button id="integrations-tab" class="nav-button">Integrations</button>
             </nav>
         </header>
 
@@ -134,6 +135,96 @@
                     </form>
                     <div id="beats-list"></div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Integrations Section -->
+        <div id="integrations-section" class="section">
+            <h2>Cloud Integrations</h2>
+            
+            <div class="card">
+                <h3>Supabase Integration</h3>
+                <div class="integration-status" id="supabase-status">
+                    <span class="status-indicator" data-status="checking">⟳</span>
+                    <span class="status-text">Checking connection...</span>
+                </div>
+                <button id="sync-supabase-btn" class="sync-button">Sync All Data to Supabase</button>
+                <div id="supabase-info" class="integration-info">
+                    <p>Supabase provides real-time database sync and authentication.</p>
+                    <ul>
+                        <li>Real-time data synchronization</li>
+                        <li>User authentication</li>
+                        <li>Automatic backups</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Notion Integration</h3>
+                <div class="integration-status" id="notion-status">
+                    <span class="status-indicator" data-status="checking">⟳</span>
+                    <span class="status-text">Checking connection...</span>
+                </div>
+                <button id="sync-notion-btn" class="sync-button">Sync to Notion</button>
+                <div id="notion-info" class="integration-info">
+                    <p>Sync your credit memos and novel projects to Notion databases.</p>
+                    <ul>
+                        <li>Create credit memo pages</li>
+                        <li>Organize novel projects</li>
+                        <li>Track chapters and story beats</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Google Drive Integration</h3>
+                <div class="integration-status" id="google-status">
+                    <span class="status-indicator" data-status="checking">⟳</span>
+                    <span class="status-text">Checking connection...</span>
+                </div>
+                <button id="auth-google-btn" class="auth-button">Connect Google Drive</button>
+                <button id="sync-drive-btn" class="sync-button" style="display:none;">Sync to Google Drive</button>
+                <div id="drive-files" class="file-list" style="display:none;">
+                    <h4>Recent Files</h4>
+                    <div id="drive-files-list"></div>
+                </div>
+                <div id="google-info" class="integration-info">
+                    <p>Store documents and spreadsheets in Google Drive.</p>
+                    <ul>
+                        <li>Create Google Docs for chapters</li>
+                        <li>Generate financial spreadsheets</li>
+                        <li>Automatic file organization</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Sync Settings</h3>
+                <form id="sync-settings-form">
+                    <label>
+                        <input type="checkbox" id="auto-sync-supabase" checked>
+                        Auto-sync to Supabase
+                    </label>
+                    <label>
+                        <input type="checkbox" id="auto-sync-notion">
+                        Auto-sync to Notion
+                    </label>
+                    <label>
+                        <input type="checkbox" id="auto-sync-drive">
+                        Auto-sync to Google Drive
+                    </label>
+                    <div class="sync-frequency">
+                        <label for="sync-interval">Sync Frequency:</label>
+                        <select id="sync-interval">
+                            <option value="manual">Manual Only</option>
+                            <option value="5">Every 5 minutes</option>
+                            <option value="15" selected>Every 15 minutes</option>
+                            <option value="30">Every 30 minutes</option>
+                            <option value="60">Every hour</option>
+                        </select>
+                    </div>
+                    <button type="submit">Save Settings</button>
+                </form>
             </div>
         </div>
     </div>

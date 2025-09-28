@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Navigation
     document.getElementById('credit-tab').addEventListener('click', () => switchTab('credit'));
     document.getElementById('novel-tab').addEventListener('click', () => switchTab('novel'));
+    document.getElementById('integrations-tab').addEventListener('click', () => switchTab('integrations'));
 
     // Credit Analysis Forms
     document.getElementById('company-form').addEventListener('submit', handleCompanySubmit);
@@ -19,9 +20,26 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('chapter-form').addEventListener('submit', handleChapterSubmit);
     document.getElementById('beat-form').addEventListener('submit', handleBeatSubmit);
 
+    // Integration buttons
+    document.getElementById('sync-supabase-btn').addEventListener('click', syncToSupabase);
+    document.getElementById('sync-notion-btn').addEventListener('click', syncToNotion);
+    document.getElementById('auth-google-btn').addEventListener('click', authenticateGoogle);
+    document.getElementById('sync-drive-btn').addEventListener('click', syncToGoogleDrive);
+    document.getElementById('sync-settings-form').addEventListener('submit', saveSyncSettings);
+
     // Load initial data
     loadCompanies();
     loadNovels();
+    checkIntegrationStatus();
+    loadGoogleDriveFiles();
+    
+    // Check for Google auth callback
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('google_auth') === 'success') {
+        showSuccess('Successfully connected to Google Drive!');
+        window.history.replaceState({}, document.title, '/');
+        loadGoogleDriveFiles();
+    }
 });
 
 // Navigation
@@ -35,6 +53,9 @@ function switchTab(tab) {
     } else if (tab === 'novel') {
         document.getElementById('novel-tab').classList.add('active');
         document.getElementById('novel-section').classList.add('active');
+    } else if (tab === 'integrations') {
+        document.getElementById('integrations-tab').classList.add('active');
+        document.getElementById('integrations-section').classList.add('active');
     }
 }
 
@@ -359,4 +380,262 @@ function parseJSON(str) {
     } catch {
         return {};
     }
+}
+
+// Integration Functions
+async function checkIntegrationStatus() {
+    // Check Supabase status
+    updateIntegrationStatus('supabase', 'checking');
+    try {
+        const response = await fetch('/api/sync/supabase/companies', { method: 'POST' });
+        if (response.ok) {
+            updateIntegrationStatus('supabase', 'connected');
+        } else {
+            updateIntegrationStatus('supabase', 'disconnected');
+        }
+    } catch {
+        updateIntegrationStatus('supabase', 'disconnected');
+    }
+
+    // Check Notion status (simplified check)
+    updateIntegrationStatus('notion', process.env.NOTION_API_KEY ? 'connected' : 'disconnected');
+    
+    // Check Google Drive status
+    updateIntegrationStatus('google', 'checking');
+    try {
+        const response = await fetch('/api/drive/files');
+        if (response.ok) {
+            updateIntegrationStatus('google', 'connected');
+            document.getElementById('auth-google-btn').style.display = 'none';
+            document.getElementById('sync-drive-btn').style.display = 'block';
+            document.getElementById('drive-files').style.display = 'block';
+        } else {
+            updateIntegrationStatus('google', 'disconnected');
+        }
+    } catch {
+        updateIntegrationStatus('google', 'disconnected');
+    }
+}
+
+function updateIntegrationStatus(service, status) {
+    const statusElement = document.getElementById(`${service}-status`);
+    const indicator = statusElement.querySelector('.status-indicator');
+    const text = statusElement.querySelector('.status-text');
+    
+    indicator.setAttribute('data-status', status);
+    
+    switch(status) {
+        case 'connected':
+            indicator.textContent = '✓';
+            text.textContent = 'Connected';
+            break;
+        case 'disconnected':
+            indicator.textContent = '✗';
+            text.textContent = 'Not connected';
+            break;
+        case 'checking':
+            indicator.textContent = '⟳';
+            text.textContent = 'Checking connection...';
+            break;
+    }
+}
+
+async function syncToSupabase() {
+    showMessage('Syncing to Supabase...', 'info');
+    
+    try {
+        // Sync companies
+        for (const company of companies) {
+            await fetch('/api/sync/all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'company',
+                    data: company
+                })
+            });
+        }
+        
+        // Sync novels
+        for (const novel of novels) {
+            await fetch('/api/sync/all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'novel',
+                    data: novel
+                })
+            });
+        }
+        
+        showSuccess('Successfully synced to Supabase!');
+    } catch (error) {
+        showError('Error syncing to Supabase: ' + error.message);
+    }
+}
+
+async function syncToNotion() {
+    showMessage('Syncing to Notion...', 'info');
+    
+    try {
+        // Get all credit memos
+        const memoResponse = await fetch('/api/credit-memos');
+        const memos = await memoResponse.json();
+        
+        // Sync each memo to Notion
+        for (const memo of memos) {
+            const company = companies.find(c => c.id === memo.company_id);
+            await fetch('/api/sync/notion/credit-memo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    memoData: {
+                        ...memo,
+                        company_name: company?.name || 'Unknown',
+                        industry: company?.industry || 'Unknown'
+                    }
+                })
+            });
+        }
+        
+        // Sync novels to Notion
+        for (const novel of novels) {
+            await fetch('/api/sync/notion/novel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ novelData: novel })
+            });
+        }
+        
+        showSuccess('Successfully synced to Notion!');
+    } catch (error) {
+        showError('Error syncing to Notion: ' + error.message);
+    }
+}
+
+async function authenticateGoogle() {
+    try {
+        const response = await fetch('/api/auth/google');
+        const data = await response.json();
+        
+        if (data.authUrl) {
+            window.location.href = data.authUrl;
+        } else {
+            showError('Could not generate Google authentication URL');
+        }
+    } catch (error) {
+        showError('Error authenticating with Google: ' + error.message);
+    }
+}
+
+async function syncToGoogleDrive() {
+    showMessage('Syncing to Google Drive...', 'info');
+    
+    try {
+        // Create financial spreadsheets for companies
+        for (const company of companies) {
+            await fetch('/api/drive/create-financial-sheet', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    companyData: company,
+                    financialData: {} // Would be populated with actual financial data
+                })
+            });
+        }
+        
+        // Create documents for novel chapters
+        const chaptersResponse = await fetch(`/api/novels/${currentNovelId}/chapters`);
+        const chapters = await chaptersResponse.json();
+        
+        for (const chapter of chapters) {
+            await fetch('/api/drive/create-chapter-doc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chapterData: chapter })
+            });
+        }
+        
+        showSuccess('Successfully synced to Google Drive!');
+        loadGoogleDriveFiles();
+    } catch (error) {
+        showError('Error syncing to Google Drive: ' + error.message);
+    }
+}
+
+async function loadGoogleDriveFiles() {
+    try {
+        const response = await fetch('/api/drive/files');
+        if (response.ok) {
+            const data = await response.json();
+            renderDriveFiles(data.files);
+        }
+    } catch (error) {
+        console.log('Could not load Google Drive files');
+    }
+}
+
+function renderDriveFiles(files) {
+    const container = document.getElementById('drive-files-list');
+    if (!files || files.length === 0) {
+        container.innerHTML = '<p>No files found</p>';
+        return;
+    }
+    
+    container.innerHTML = files.map(file => `
+        <div class="file-item">
+            <span class="file-icon">${getFileIcon(file.mimeType)}</span>
+            <span class="file-name">${file.name}</span>
+            <a href="${file.webViewLink}" target="_blank" class="file-link">Open</a>
+        </div>
+    `).join('');
+}
+
+function getFileIcon(mimeType) {
+    if (mimeType.includes('document')) return '📄';
+    if (mimeType.includes('spreadsheet')) return '📊';
+    if (mimeType.includes('folder')) return '📁';
+    return '📎';
+}
+
+async function saveSyncSettings(e) {
+    e.preventDefault();
+    
+    const settings = {
+        autoSyncSupabase: document.getElementById('auto-sync-supabase').checked,
+        autoSyncNotion: document.getElementById('auto-sync-notion').checked,
+        autoSyncDrive: document.getElementById('auto-sync-drive').checked,
+        syncInterval: document.getElementById('sync-interval').value
+    };
+    
+    localStorage.setItem('syncSettings', JSON.stringify(settings));
+    
+    // Set up auto-sync if enabled
+    if (settings.syncInterval !== 'manual') {
+        const intervalMinutes = parseInt(settings.syncInterval);
+        setInterval(() => {
+            if (settings.autoSyncSupabase) syncToSupabase();
+            if (settings.autoSyncNotion) syncToNotion();
+            if (settings.autoSyncDrive) syncToGoogleDrive();
+        }, intervalMinutes * 60 * 1000);
+    }
+    
+    showSuccess('Sync settings saved!');
+}
+
+function showMessage(message, type) {
+    const existingMessage = document.querySelector('.success-message, .error-message, .info-message');
+    if (existingMessage) {
+        existingMessage.remove();
+    }
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = type === 'success' ? 'success-message' : type === 'error' ? 'error-message' : 'info-message';
+    messageDiv.textContent = message;
+    
+    document.querySelector('.container').insertBefore(messageDiv, document.querySelector('.container').firstChild.nextSibling);
+    
+    setTimeout(() => {
+        messageDiv.remove();
+    }, 5000);
 }
