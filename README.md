@@ -42,6 +42,49 @@ A comprehensive workspace application that combines credit analysis tools for co
 - **File Upload**: Multer middleware
 - **OCR**: Framework ready for integration with tesseract.js or similar
 
+## Integrations
+
+The app can integrate with Supabase Storage, Notion, and Google Drive. Use the checkboxes in the UI to opt-in per action. Availability is shown by enabling/disabling those checkboxes based on server configuration.
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and fill values:
+
+```bash
+cp .env.example .env
+```
+
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_ANON_KEY`): Supabase project credentials
+- `SUPABASE_BUCKET`: Storage bucket name (default: `financial-documents`)
+- `NOTION_TOKEN`, `NOTION_DATABASE_ID`: Notion internal integration token and database ID
+- `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_DRIVE_FOLDER_ID`: Google service account and a target folder ID
+
+Notes:
+- For `GOOGLE_PRIVATE_KEY`, keep it on one line with `\n` for newlines, e.g. `"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"`.
+- The app automatically converts `\n` to real newlines at runtime.
+
+### Supabase Setup
+- Create a Supabase project and a Storage bucket (e.g. `financial-documents`).
+- Optionally make the bucket public if you need public links, or keep private and serve via signed URLs (current code uses public URLs).
+- Get the Service Role key for server-side uploads and set `SUPABASE_SERVICE_ROLE_KEY`.
+
+### Notion Setup
+- Create a Notion internal integration and get the token.
+- Create a database (or use an existing one) and share it with the integration.
+- Copy the database ID to `NOTION_DATABASE_ID`.
+
+### Google Drive Setup
+- Create a Google Cloud project and enable the Drive API.
+- Create a Service Account and generate a JSON key.
+- Use the service account email to share a target Drive folder (or its parent) with at least `Writer` access, and set that folder's ID in `GOOGLE_DRIVE_FOLDER_ID`.
+- Put the JSON key fields into `.env`:
+  - `GOOGLE_CLIENT_EMAIL`
+  - `GOOGLE_PRIVATE_KEY` (escaped with `\n` as above)
+
+### Runtime
+- Start the server and visit `/api/integrations` to see booleans for configured services.
+- In the UI, checkboxes will be disabled if a service is not configured.
+
 ## Installation
 
 1. Clone the repository:

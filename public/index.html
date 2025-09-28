@@ -44,6 +44,10 @@
                         <option value="income_statement">Income Statement</option>
                     </select>
                     <input type="file" id="financial-document" accept=".pdf,.jpg,.png,.jpeg" required>
+                    <div class="integrations">
+                        <label><input type="checkbox" id="flag-supabase"> Upload copy to Supabase</label>
+                        <label><input type="checkbox" id="flag-drive"> Upload copy to Google Drive</label>
+                    </div>
                     <button type="submit">Upload & Process</button>
                 </form>
             </div>
@@ -64,6 +68,9 @@
                     <input type="text" id="memo-title" placeholder="Memo Title" required>
                     <textarea id="memo-content" placeholder="Memo Content" rows="5" required></textarea>
                     <textarea id="memo-metrics" placeholder="Financial Metrics (JSON format)" rows="3"></textarea>
+                    <div class="integrations">
+                        <label><input type="checkbox" id="flag-notion"> Export to Notion</label>
+                    </div>
                     <button type="submit">Generate Credit Memo</button>
                 </form>
             </div>

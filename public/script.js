@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load initial data
     loadCompanies();
     loadNovels();
+    loadIntegrationAvailability();
 });
 
 // Navigation
@@ -100,6 +101,8 @@ async function handleFileUpload(e) {
     formData.append('company_id', document.getElementById('upload-company').value);
     formData.append('document_type', document.getElementById('document-type').value);
     formData.append('document', document.getElementById('financial-document').files[0]);
+    formData.append('uploadToSupabase', document.getElementById('flag-supabase').checked);
+    formData.append('uploadToDrive', document.getElementById('flag-drive').checked);
 
     try {
         const response = await fetch('/api/upload-financial', {
@@ -125,7 +128,8 @@ async function handleMemoSubmit(e) {
         memo_type: document.getElementById('memo-type').value,
         title: document.getElementById('memo-title').value,
         content: document.getElementById('memo-content').value,
-        financial_metrics: parseJSON(document.getElementById('memo-metrics').value)
+        financial_metrics: parseJSON(document.getElementById('memo-metrics').value),
+        exportToNotion: document.getElementById('flag-notion').checked
     };
 
     try {
@@ -358,5 +362,32 @@ function parseJSON(str) {
         return str ? JSON.parse(str) : {};
     } catch {
         return {};
+    }
+}
+
+// Integrations availability
+async function loadIntegrationAvailability() {
+    try {
+        const res = await fetch('/api/integrations');
+        if (!res.ok) return;
+        const cfg = await res.json();
+        const supabaseEl = document.getElementById('flag-supabase');
+        const driveEl = document.getElementById('flag-drive');
+        const notionEl = document.getElementById('flag-notion');
+
+        if (supabaseEl) {
+            supabaseEl.disabled = !cfg.supabase;
+            supabaseEl.title = cfg.supabase ? '' : 'Supabase not configured on server';
+        }
+        if (driveEl) {
+            driveEl.disabled = !cfg.googleDrive;
+            driveEl.title = cfg.googleDrive ? '' : 'Google Drive not configured on server';
+        }
+        if (notionEl) {
+            notionEl.disabled = !cfg.notion;
+            notionEl.title = cfg.notion ? '' : 'Notion not configured on server';
+        }
+    } catch (e) {
+        // ignore; endpoint may be unavailable during startup
     }
 }
