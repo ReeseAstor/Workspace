@@ -4,11 +4,19 @@ const multer = require('multer');
 const bodyParser = require('body-parser');
 const path = require('path');
 const fs = require('fs');
+const cors = require('cors');
+require('dotenv').config();
+
+// Import integration services
+const supabaseService = require('./services/supabase');
+const notionService = require('./services/notion');
+const googleDriveService = require('./services/googleDrive');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
+app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
@@ -221,9 +229,185 @@ app.post('/api/beats', (req, res) => {
     });
 });
 
+// Integration Routes
+
+// Supabase sync endpoints
+app.post('/api/sync/supabase/companies', async (req, res) => {
+    try {
+        const companies = await supabaseService.getCompanies();
+        res.json({ success: true, data: companies });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/sync/supabase/novels', async (req, res) => {
+    try {
+        const novels = await supabaseService.getNovels();
+        res.json({ success: true, data: novels });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Notion sync endpoints
+app.post('/api/sync/notion/credit-memo', async (req, res) => {
+    const { memoData } = req.body;
+    try {
+        const pageId = await notionService.createCreditMemoPage(memoData);
+        res.json({ success: true, notionPageId: pageId });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/sync/notion/novel', async (req, res) => {
+    const { novelData } = req.body;
+    try {
+        const pageId = await notionService.createNovelPage(novelData);
+        res.json({ success: true, notionPageId: pageId });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Google Drive endpoints
+app.get('/api/auth/google', (req, res) => {
+    const authUrl = googleDriveService.getAuthUrl();
+    if (authUrl) {
+        res.json({ authUrl });
+    } else {
+        res.status(400).json({ error: 'Google Drive not configured' });
+    }
+});
+
+app.get('/auth/google/callback', async (req, res) => {
+    const { code } = req.query;
+    if (code) {
+        const tokens = await googleDriveService.getTokens(code);
+        if (tokens) {
+            res.redirect('/?google_auth=success');
+        } else {
+            res.redirect('/?google_auth=failed');
+        }
+    } else {
+        res.redirect('/?google_auth=failed');
+    }
+});
+
+app.post('/api/drive/create-chapter-doc', async (req, res) => {
+    const { chapterData, folderId } = req.body;
+    try {
+        const doc = await googleDriveService.createChapterDocument(chapterData, folderId);
+        res.json({ success: true, document: doc });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/drive/create-financial-sheet', async (req, res) => {
+    const { companyData, financialData } = req.body;
+    try {
+        const sheet = await googleDriveService.createFinancialSpreadsheet(companyData, financialData);
+        res.json({ success: true, spreadsheet: sheet });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/drive/files', async (req, res) => {
+    const { folderId } = req.query;
+    try {
+        const files = await googleDriveService.listFiles(folderId);
+        res.json({ success: true, files });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Combined sync endpoint
+app.post('/api/sync/all', async (req, res) => {
+    const { type, data } = req.body;
+    const results = {};
+
+    try {
+        if (type === 'credit_memo') {
+            // Sync to Supabase
+            if (supabaseService.supabase) {
+                const supabaseResult = await supabaseService.createCreditMemo(data);
+                results.supabase = supabaseResult;
+            }
+
+            // Sync to Notion
+            if (notionService.notion) {
+                const notionPageId = await notionService.createCreditMemoPage(data);
+                results.notion = notionPageId;
+            }
+
+            // Create Google Sheet if financial data exists
+            if (googleDriveService.drive && data.financial_metrics) {
+                const sheet = await googleDriveService.createFinancialSpreadsheet(
+                    { name: data.company_name, industry: data.industry },
+                    data.financial_metrics
+                );
+                results.googleDrive = sheet;
+            }
+        } else if (type === 'novel') {
+            // Sync to Supabase
+            if (supabaseService.supabase) {
+                const supabaseResult = await supabaseService.createNovel(data);
+                results.supabase = supabaseResult;
+            }
+
+            // Sync to Notion
+            if (notionService.notion) {
+                const notionPageId = await notionService.createNovelPage(data);
+                results.notion = notionPageId;
+            }
+
+            // Create Google Drive folder for novel
+            if (googleDriveService.drive) {
+                const folder = await googleDriveService.createFolder(data.title);
+                results.googleDrive = folder;
+            }
+        } else if (type === 'chapter') {
+            // Sync to Supabase
+            if (supabaseService.supabase) {
+                const supabaseResult = await supabaseService.createChapter(data);
+                results.supabase = supabaseResult;
+            }
+
+            // Update Notion
+            if (notionService.notion && data.notion_page_id) {
+                await notionService.updateChapterInNotion(data.notion_page_id, data);
+                results.notion = true;
+            }
+
+            // Create Google Doc
+            if (googleDriveService.drive) {
+                const doc = await googleDriveService.createChapterDocument(data, data.folder_id);
+                results.googleDrive = doc;
+            }
+        }
+
+        res.json({ success: true, results });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Initialize Google Drive tokens on startup
+(async () => {
+    await googleDriveService.loadTokens();
+})();
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Workspace server running on port ${PORT}`);
+    console.log('Integration services:');
+    console.log('- Supabase:', supabaseService.supabase ? 'Connected' : 'Not configured');
+    console.log('- Notion:', notionService.notion ? 'Connected' : 'Not configured');
+    console.log('- Google Drive:', googleDriveService.oauth2Client ? 'Initialized' : 'Not configured');
 });
 
 // Graceful shutdown
