@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Navigation
     document.getElementById('credit-tab').addEventListener('click', () => switchTab('credit'));
     document.getElementById('novel-tab').addEventListener('click', () => switchTab('novel'));
+    document.getElementById('integrations-tab').addEventListener('click', () => switchTab('integrations'));
 
     // Credit Analysis Forms
     document.getElementById('company-form').addEventListener('submit', handleCompanySubmit);
@@ -19,9 +20,14 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('chapter-form').addEventListener('submit', handleChapterSubmit);
     document.getElementById('beat-form').addEventListener('submit', handleBeatSubmit);
 
+    // Integration Forms
+    document.getElementById('refresh-status').addEventListener('click', checkIntegrationStatus);
+    document.getElementById('google-auth-btn').addEventListener('click', handleGoogleAuth);
+
     // Load initial data
     loadCompanies();
     loadNovels();
+    checkIntegrationStatus();
 });
 
 // Navigation
@@ -35,6 +41,9 @@ function switchTab(tab) {
     } else if (tab === 'novel') {
         document.getElementById('novel-tab').classList.add('active');
         document.getElementById('novel-section').classList.add('active');
+    } else if (tab === 'integrations') {
+        document.getElementById('integrations-tab').classList.add('active');
+        document.getElementById('integrations-section').classList.add('active');
     }
 }
 
@@ -358,5 +367,262 @@ function parseJSON(str) {
         return str ? JSON.parse(str) : {};
     } catch {
         return {};
+    }
+}
+
+// Integration Functions
+
+// Check integration status
+async function checkIntegrationStatus() {
+    try {
+        const response = await fetch('/api/integrations/status');
+        const status = await response.json();
+        
+        updateStatusIndicator('supabase-status', status.supabase);
+        updateStatusIndicator('notion-status', status.notion);
+        updateStatusIndicator('google-drive-status', status.googleDrive);
+    } catch (error) {
+        console.error('Error checking integration status:', error);
+        updateStatusIndicator('supabase-status', false);
+        updateStatusIndicator('notion-status', false);
+        updateStatusIndicator('google-drive-status', false);
+    }
+}
+
+function updateStatusIndicator(elementId, isConnected) {
+    const element = document.getElementById(elementId);
+    if (isConnected) {
+        element.textContent = 'Connected';
+        element.className = 'status-indicator connected';
+    } else {
+        element.textContent = 'Disconnected';
+        element.className = 'status-indicator disconnected';
+    }
+}
+
+// Google Drive authentication
+async function handleGoogleAuth() {
+    try {
+        const response = await fetch('/api/google-drive/auth-url');
+        const data = await response.json();
+        
+        // Open Google OAuth in a popup window
+        const popup = window.open(data.authUrl, 'google-auth', 'width=500,height=600');
+        
+        // Listen for the popup to close and check for success
+        const checkClosed = setInterval(() => {
+            if (popup.closed) {
+                clearInterval(checkClosed);
+                checkIntegrationStatus();
+            }
+        }, 1000);
+        
+    } catch (error) {
+        showError('Error initiating Google Drive authentication: ' + error.message);
+    }
+}
+
+// Enhanced memo submission with integrations
+async function handleMemoSubmit(e) {
+    e.preventDefault();
+    const memoData = {
+        company_id: document.getElementById('memo-company').value,
+        memo_type: document.getElementById('memo-type').value,
+        title: document.getElementById('memo-title').value,
+        content: document.getElementById('memo-content').value,
+        financial_metrics: parseJSON(document.getElementById('memo-metrics').value)
+    };
+
+    try {
+        // Create memo in local database
+        const response = await fetch('/api/credit-memos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(memoData)
+        });
+
+        if (response.ok) {
+            showSuccess('Credit memo created successfully!');
+            document.getElementById('memo-form').reset();
+            
+            // Check for integration options
+            const syncNotion = document.getElementById('memo-sync-notion').checked;
+            const syncDrive = document.getElementById('memo-sync-drive').checked;
+            
+            if (syncNotion) {
+                await syncMemoToNotion(memoData);
+            }
+            
+            if (syncDrive) {
+                await syncMemoToDrive(memoData);
+            }
+        } else {
+            throw new Error('Failed to create credit memo');
+        }
+    } catch (error) {
+        showError('Error creating credit memo: ' + error.message);
+    }
+}
+
+// Enhanced novel submission with integrations
+async function handleNovelSubmit(e) {
+    e.preventDefault();
+    const novelData = {
+        title: document.getElementById('novel-title').value,
+        description: document.getElementById('novel-description').value,
+        pov_style: document.getElementById('novel-pov').value,
+        tense: document.getElementById('novel-tense').value,
+        target_chapters: parseInt(document.getElementById('target-chapters').value),
+        target_beats: parseInt(document.getElementById('target-beats').value)
+    };
+
+    try {
+        // Create novel in local database
+        const response = await fetch('/api/novels', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(novelData)
+        });
+
+        if (response.ok) {
+            showSuccess('Novel project created successfully!');
+            document.getElementById('novel-form').reset();
+            loadNovels();
+            
+            // Check for integration options
+            const syncNotion = document.getElementById('novel-sync-notion').checked;
+            const syncDrive = document.getElementById('novel-sync-drive').checked;
+            
+            if (syncNotion) {
+                await syncNovelToNotion(novelData);
+            }
+            
+            if (syncDrive) {
+                await syncNovelToDrive(novelData);
+            }
+        } else {
+            throw new Error('Failed to create novel project');
+        }
+    } catch (error) {
+        showError('Error creating novel project: ' + error.message);
+    }
+}
+
+// Sync memo to Notion
+async function syncMemoToNotion(memoData) {
+    try {
+        const company = companies.find(c => c.id == memoData.company_id);
+        const notionData = {
+            company_name: company ? company.name : 'Unknown Company',
+            memo_type: memoData.memo_type,
+            title: memoData.title,
+            content: memoData.content,
+            financial_metrics: JSON.stringify(memoData.financial_metrics)
+        };
+        
+        const response = await fetch('/api/notion/credit-memo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(notionData)
+        });
+        
+        if (response.ok) {
+            showSuccess('Credit memo synced to Notion!');
+        } else {
+            throw new Error('Failed to sync to Notion');
+        }
+    } catch (error) {
+        showError('Error syncing to Notion: ' + error.message);
+    }
+}
+
+// Sync novel to Notion
+async function syncNovelToNotion(novelData) {
+    try {
+        const response = await fetch('/api/notion/novel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(novelData)
+        });
+        
+        if (response.ok) {
+            showSuccess('Novel project synced to Notion!');
+        } else {
+            throw new Error('Failed to sync to Notion');
+        }
+    } catch (error) {
+        showError('Error syncing to Notion: ' + error.message);
+    }
+}
+
+// Sync memo to Google Drive
+async function syncMemoToDrive(memoData) {
+    try {
+        // Create a text file with memo content
+        const memoContent = `
+Credit Memo: ${memoData.title}
+Type: ${memoData.memo_type}
+Date: ${new Date().toLocaleDateString()}
+
+Content:
+${memoData.content}
+
+Financial Metrics:
+${JSON.stringify(memoData.financial_metrics, null, 2)}
+        `;
+        
+        // Create a blob and upload
+        const blob = new Blob([memoContent], { type: 'text/plain' });
+        const formData = new FormData();
+        formData.append('document', blob, `${memoData.title}.txt`);
+        formData.append('company_name', 'Credit Memos');
+        
+        const response = await fetch('/api/google-drive/upload-financial', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            showSuccess('Credit memo uploaded to Google Drive!');
+        } else {
+            throw new Error('Failed to upload to Google Drive');
+        }
+    } catch (error) {
+        showError('Error uploading to Google Drive: ' + error.message);
+    }
+}
+
+// Sync novel to Google Drive
+async function syncNovelToDrive(novelData) {
+    try {
+        // Create a text file with novel content
+        const novelContent = `
+Novel Project: ${novelData.title}
+Description: ${novelData.description}
+POV Style: ${novelData.pov_style}
+Tense: ${novelData.tense}
+Target Chapters: ${novelData.target_chapters}
+Target Beats: ${novelData.target_beats}
+Created: ${new Date().toLocaleDateString()}
+        `;
+        
+        // Create a blob and upload
+        const blob = new Blob([novelContent], { type: 'text/plain' });
+        const formData = new FormData();
+        formData.append('document', blob, `${novelData.title} - Project Overview.txt`);
+        formData.append('novel_title', novelData.title);
+        
+        const response = await fetch('/api/google-drive/upload-novel', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            showSuccess('Novel project uploaded to Google Drive!');
+        } else {
+            throw new Error('Failed to upload to Google Drive');
+        }
+    } catch (error) {
+        showError('Error uploading to Google Drive: ' + error.message);
     }
 }
