@@ -259,6 +259,7 @@ async function handleNovelSubmit(e) {
     };
 
     try {
+        // Create novel in local database
         const response = await fetch('/api/novels', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -269,6 +270,18 @@ async function handleNovelSubmit(e) {
             showSuccess('Novel project created successfully!');
             document.getElementById('novel-form').reset();
             loadNovels();
+            
+            // Check for integration options
+            const syncNotion = document.getElementById('novel-sync-notion').checked;
+            const syncDrive = document.getElementById('novel-sync-drive').checked;
+            
+            if (syncNotion) {
+                await syncNovelToNotion(novelData);
+            }
+            
+            if (syncDrive) {
+                await syncNovelToDrive(novelData);
+            }
         } else {
             throw new Error('Failed to create novel project');
         }
@@ -464,49 +477,6 @@ async function handleMemoSubmit(e) {
     }
 }
 
-// Enhanced novel submission with integrations
-async function handleNovelSubmit(e) {
-    e.preventDefault();
-    const novelData = {
-        title: document.getElementById('novel-title').value,
-        description: document.getElementById('novel-description').value,
-        pov_style: document.getElementById('novel-pov').value,
-        tense: document.getElementById('novel-tense').value,
-        target_chapters: parseInt(document.getElementById('target-chapters').value),
-        target_beats: parseInt(document.getElementById('target-beats').value)
-    };
-
-    try {
-        // Create novel in local database
-        const response = await fetch('/api/novels', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(novelData)
-        });
-
-        if (response.ok) {
-            showSuccess('Novel project created successfully!');
-            document.getElementById('novel-form').reset();
-            loadNovels();
-            
-            // Check for integration options
-            const syncNotion = document.getElementById('novel-sync-notion').checked;
-            const syncDrive = document.getElementById('novel-sync-drive').checked;
-            
-            if (syncNotion) {
-                await syncNovelToNotion(novelData);
-            }
-            
-            if (syncDrive) {
-                await syncNovelToDrive(novelData);
-            }
-        } else {
-            throw new Error('Failed to create novel project');
-        }
-    } catch (error) {
-        showError('Error creating novel project: ' + error.message);
-    }
-}
 
 // Sync memo to Notion
 async function syncMemoToNotion(memoData) {
