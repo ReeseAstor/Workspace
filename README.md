@@ -115,3 +115,31 @@ The application is designed to be easily extensible:
 ## License
 
 MIT License
+
+## Cloud Integrations
+
+This app supports optional integrations with Supabase (Storage), Notion (pages for credit memos), and Google Drive (document uploads).
+
+### Setup
+
+1. Copy the env template and edit values:
+```bash
+cp .env.example .env
+```
+2. Enable desired providers by setting flags to `true`:
+   - `ENABLE_SUPABASE`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`, `SUPABASE_PUBLIC_FILES`
+   - `ENABLE_NOTION`, `NOTION_TOKEN`, `NOTION_DATABASE_ID`
+   - `ENABLE_GOOGLE_DRIVE`, `GOOGLE_APPLICATION_CREDENTIALS`, `GDRIVE_FOLDER_ID`, `GDRIVE_MAKE_PUBLIC`
+
+### Supabase
+- Create a storage bucket (default: `financial-docs`).
+- Use the Service Role key server-side only.
+
+### Notion
+- Create an internal integration and share a database with it.
+- Use the shared database ID for `NOTION_DATABASE_ID`.
+
+### Google Drive
+- Create a Google Cloud Service Account, enable Drive API.
+- Share your target Drive folder with the service account email.
+- Set `GOOGLE_APPLICATION_CREDENTIALS` to the JSON credentials file path.
