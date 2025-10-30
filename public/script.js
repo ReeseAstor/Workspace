@@ -272,8 +272,8 @@ async function handleNovelSubmit(e) {
             loadNovels();
             
             // Check for integration options
-            const syncNotion = document.getElementById('novel-sync-notion')?.checked;
-            const syncDrive = document.getElementById('novel-sync-drive')?.checked;
+            const syncNotion = document.getElementById('novel-sync-notion').checked;
+            const syncDrive = document.getElementById('novel-sync-drive').checked;
             
             if (syncNotion) {
                 await syncNovelToNotion(novelData);
