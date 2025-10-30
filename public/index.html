@@ -13,6 +13,7 @@
             <nav>
                 <button id="credit-tab" class="nav-button active">Credit Analysis</button>
                 <button id="novel-tab" class="nav-button">Novel Planning</button>
+                <button id="integrations-tab" class="nav-button">Integrations</button>
             </nav>
         </header>
 
@@ -64,6 +65,14 @@
                     <input type="text" id="memo-title" placeholder="Memo Title" required>
                     <textarea id="memo-content" placeholder="Memo Content" rows="5" required></textarea>
                     <textarea id="memo-metrics" placeholder="Financial Metrics (JSON format)" rows="3"></textarea>
+                    <div class="integration-options">
+                        <label>
+                            <input type="checkbox" id="memo-sync-notion"> Sync to Notion
+                        </label>
+                        <label>
+                            <input type="checkbox" id="memo-sync-drive"> Upload to Google Drive
+                        </label>
+                    </div>
                     <button type="submit">Generate Credit Memo</button>
                 </form>
             </div>
@@ -91,6 +100,14 @@
                     <label for="target-chapters">Target Chapters</label>
                     <input type="number" id="target-beats" value="250" min="1" max="1000">
                     <label for="target-beats">Target Story Beats</label>
+                    <div class="integration-options">
+                        <label>
+                            <input type="checkbox" id="novel-sync-notion"> Sync to Notion
+                        </label>
+                        <label>
+                            <input type="checkbox" id="novel-sync-drive"> Upload to Google Drive
+                        </label>
+                    </div>
                     <button type="submit">Create Novel Project</button>
                 </form>
                 <div id="novels-list"></div>
@@ -133,6 +150,63 @@
                         <button type="submit">Add Story Beat</button>
                     </form>
                     <div id="beats-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Integrations Section -->
+        <div id="integrations-section" class="section">
+            <h2>Integrations</h2>
+            
+            <div class="card">
+                <h3>Integration Status</h3>
+                <div id="integration-status">
+                    <div class="status-item">
+                        <span class="status-label">Supabase:</span>
+                        <span id="supabase-status" class="status-indicator">Checking...</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Notion:</span>
+                        <span id="notion-status" class="status-indicator">Checking...</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Google Drive:</span>
+                        <span id="google-drive-status" class="status-indicator">Checking...</span>
+                    </div>
+                </div>
+                <button id="refresh-status" class="btn-secondary">Refresh Status</button>
+            </div>
+
+            <div class="card">
+                <h3>Google Drive Authentication</h3>
+                <p>Connect your Google Drive account to enable file storage and document management.</p>
+                <button id="google-auth-btn" class="btn-primary">Connect Google Drive</button>
+                <div id="google-auth-status"></div>
+            </div>
+
+            <div class="card">
+                <h3>Notion Integration</h3>
+                <p>Sync your credit memos and novel projects to Notion for enhanced organization and collaboration.</p>
+                <div class="integration-info">
+                    <p><strong>Setup Instructions:</strong></p>
+                    <ol>
+                        <li>Create a Notion integration at <a href="https://www.notion.so/my-integrations" target="_blank">notion.so/my-integrations</a></li>
+                        <li>Copy your integration token to the .env file</li>
+                        <li>Create a database in Notion and copy its ID to the .env file</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Supabase Database</h3>
+                <p>Your data is automatically synced to Supabase for cloud storage and real-time updates.</p>
+                <div class="integration-info">
+                    <p><strong>Setup Instructions:</strong></p>
+                    <ol>
+                        <li>Create a Supabase project at <a href="https://supabase.com" target="_blank">supabase.com</a></li>
+                        <li>Copy your project URL and API keys to the .env file</li>
+                        <li>Run the database migration script to set up tables</li>
+                    </ol>
                 </div>
             </div>
         </div>
