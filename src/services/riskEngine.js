@@ -12,11 +12,22 @@ class RiskEngine {
     return Date.now() - quote.receivedAt <= this.config.maxQuoteAgeMs;
   }
 
+  _isCurrencyAllowed(currency) {
+    if (!currency) return false;
+    if (!Array.isArray(this.config.allowedCurrencies) || !this.config.allowedCurrencies.length) {
+      return true;
+    }
+    return this.config.allowedCurrencies.includes(currency.toUpperCase());
+  }
+
   evaluatePair(buyLeg, sellLeg) {
     const issues = [];
     if (!this._isFresh(buyLeg)) issues.push('buy_leg_stale');
     if (!this._isFresh(sellLeg)) issues.push('sell_leg_stale');
     if (buyLeg.currency !== sellLeg.currency) issues.push('currency_mismatch');
+    if (!this._isCurrencyAllowed(buyLeg.currency) || !this._isCurrencyAllowed(sellLeg.currency)) {
+      issues.push('currency_not_allowed');
+    }
     const quantity = Math.min(
       buyLeg.availableUnits || 0,
       sellLeg.availableUnits || 0,

@@ -27,6 +27,7 @@ const baseSchema = z.object({
   feeBps: z.number().nonnegative().default(0),
   slippageBps: z.number().nonnegative().default(0),
   currency: z.string().length(3).default('USD'),
+  region: z.string().length(2).default('US'),
   supportedBrands: z.array(z.string()).min(1),
 });
 
@@ -56,6 +57,7 @@ const buildConfigFromEnv = (prefix) => {
     feeBps: parseInt(envKey('FEE_BPS') || '0', 10),
     slippageBps: parseInt(envKey('SLIPPAGE_BPS') || '0', 10),
     currency: (envKey('CURRENCY') || 'USD').toUpperCase(),
+    region: (envKey('REGION') || 'US').toUpperCase(),
     supportedBrands: listFromEnv(envKey('BRANDS')),
   };
 
@@ -72,7 +74,23 @@ const buildConfigFromEnv = (prefix) => {
     throw new Error(`Invalid marketplace configuration for ${prefix}: ${parsed.error.message}`);
   }
 
-  return parsed.data;
+  const data = parsed.data;
+  if (
+    env.allowedRegions.length &&
+    !env.allowedRegions.includes(data.region.toUpperCase())
+  ) {
+    console.warn(`Skipping ${prefix}: region ${data.region} not allowed`);
+    return null;
+  }
+  if (
+    env.allowedCurrencies.length &&
+    !env.allowedCurrencies.includes(data.currency.toUpperCase())
+  ) {
+    console.warn(`Skipping ${prefix}: currency ${data.currency} not allowed`);
+    return null;
+  }
+
+  return data;
 };
 
 const mockMarkets = (
@@ -89,6 +107,7 @@ const mockMarkets = (
           feeBps: 20,
           slippageBps: 5,
           currency: 'USD',
+          region: 'US',
           supportedBrands: ['Amazon', 'Apple', 'PlayStation'],
         },
         {
@@ -102,6 +121,7 @@ const mockMarkets = (
           feeBps: 15,
           slippageBps: 5,
           currency: 'USD',
+          region: 'US',
           supportedBrands: ['Amazon', 'Apple', 'PlayStation'],
         },
       ]

@@ -10,10 +10,20 @@ const toInt = (value, fallback) => {
   return Number.isNaN(parsed) ? fallback : parsed;
 };
 
+const toList = (value, fallback = []) => {
+  if (!value) return fallback;
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
 const config = {
   port: toInt(process.env.PORT, 3000),
   logLevel: process.env.LOG_LEVEL || 'info',
   logPretty: toBool(process.env.LOG_PRETTY, false),
+  allowedRegions: toList(process.env.ALLOWED_REGIONS, ['US']).map((region) => region.toUpperCase()),
+  allowedCurrencies: toList(process.env.ALLOWED_CURRENCIES, ['USD']).map((currency) => currency.toUpperCase()),
   profitThresholdBps: toInt(process.env.PROFIT_THRESHOLD_BPS, 75),
   maxQuoteAgeMs: toInt(process.env.MAX_QUOTE_AGE_MS, 4_500),
   fxSpreadBps: toInt(process.env.FX_SPREAD_BPS, 15),

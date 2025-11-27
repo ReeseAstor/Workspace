@@ -8,6 +8,7 @@ Production-grade Node.js platform for monitoring digital gift card venues, valid
 - **Risk controls** – freshness checks, fee-aware PnL math, opportunity deduplication, and SQLite-backed audit trail for opportunities and fills.
 - **Execution workflow** – REST endpoint to trigger trades after revalidation; hooks ready for integrating reservation/settlement flows per venue.
 - **Operations dashboard** – SSE-driven control room showing market health, executable spreads, order books, and execution log (no demo data injected).
+- **Jurisdiction gating** – environment allowlists enforce US-only venues and USD-only pricing out of the box, keeping the platform compliant with domestic mandates.
 
 ## System Architecture
 ```
@@ -48,6 +49,8 @@ Market APIs/WebSockets --> Marketplace Connectors --> Kafka-like bus (EventEmitt
 | `PORT` | HTTP/SSE server port (default 3000). |
 | `PROFIT_THRESHOLD_BPS` | Minimum net spread required to surface an opportunity. |
 | `MAX_QUOTE_AGE_MS` | Quotes older than this are discarded. |
+| `ALLOWED_REGIONS` | Comma-separated ISO country/region codes (default `US`). |
+| `ALLOWED_CURRENCIES` | Comma-separated ISO currency codes (default `USD`). |
 | `FX_SPREAD_BPS` / `NETWORK_FEE_BPS` | Global fee cushions added to venue fees. |
 | `MAX_CARDS_PER_TRADE` | Hard cap per execution request. |
 | `SQLITE_DB_PATH` | Audit database location. |
