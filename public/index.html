@@ -1,217 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Credit Analysis & Novel Planning Workspace</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gift Card Arbitrage Control Room</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Workspace</h1>
-            <nav>
-                <button id="credit-tab" class="nav-button active">Credit Analysis</button>
-                <button id="novel-tab" class="nav-button">Novel Planning</button>
-                <button id="integrations-tab" class="nav-button">Integrations</button>
-            </nav>
-        </header>
-
-        <!-- Credit Analysis Section -->
-        <div id="credit-section" class="section active">
-            <h2>Credit Analysis for Commodities Trading</h2>
-            
-            <div class="card">
-                <h3>Companies Management</h3>
-                <form id="company-form">
-                    <input type="text" id="company-name" placeholder="Company Name" required>
-                    <input type="text" id="company-industry" placeholder="Industry" required>
-                    <button type="submit">Add Company</button>
-                </form>
-                <div id="companies-list"></div>
-            </div>
-
-            <div class="card">
-                <h3>Financial Document Upload (OCR)</h3>
-                <form id="upload-form" enctype="multipart/form-data">
-                    <select id="upload-company" required>
-                        <option value="">Select Company</option>
-                    </select>
-                    <select id="document-type" required>
-                        <option value="">Document Type</option>
-                        <option value="financial_statement">Financial Statement</option>
-                        <option value="balance_sheet">Balance Sheet</option>
-                        <option value="cash_flow">Cash Flow Statement</option>
-                        <option value="income_statement">Income Statement</option>
-                    </select>
-                    <input type="file" id="financial-document" accept=".pdf,.jpg,.png,.jpeg" required>
-                    <button type="submit">Upload & Process</button>
-                </form>
-            </div>
-
-            <div class="card">
-                <h3>Credit Memo Generation</h3>
-                <form id="memo-form">
-                    <select id="memo-company" required>
-                        <option value="">Select Company</option>
-                    </select>
-                    <select id="memo-type" required>
-                        <option value="">Memo Type</option>
-                        <option value="annual_review">Annual Review</option>
-                        <option value="refinancing">Refinancing</option>
-                        <option value="new_deal">New Deal</option>
-                        <option value="amendment">Amendment</option>
-                    </select>
-                    <input type="text" id="memo-title" placeholder="Memo Title" required>
-                    <textarea id="memo-content" placeholder="Memo Content" rows="5" required></textarea>
-                    <textarea id="memo-metrics" placeholder="Financial Metrics (JSON format)" rows="3"></textarea>
-                    <div class="integration-options">
-                        <label>
-                            <input type="checkbox" id="memo-sync-notion"> Sync to Notion
-                        </label>
-                        <label>
-                            <input type="checkbox" id="memo-sync-drive"> Upload to Google Drive
-                        </label>
-                    </div>
-                    <button type="submit">Generate Credit Memo</button>
-                </form>
-            </div>
+  <div class="app">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Live Production Environment</p>
+        <h1>Digital Gift Card Arbitrage</h1>
+        <p class="subtitle">Real-time monitoring, validation, and execution safeguards engineered for zero-risk spreads.</p>
+      </div>
+      <div class="hero-metrics" id="hero-metrics">
+        <div>
+          <span class="label">Opportunities</span>
+          <strong id="hero-opps">0</strong>
         </div>
-
-        <!-- Novel Planning Section -->
-        <div id="novel-section" class="section">
-            <h2>Novel Planning & Story Development</h2>
-            
-            <div class="card">
-                <h3>Novel Projects</h3>
-                <form id="novel-form">
-                    <input type="text" id="novel-title" placeholder="Novel Title" required>
-                    <textarea id="novel-description" placeholder="Novel Description" rows="3"></textarea>
-                    <select id="novel-pov">
-                        <option value="dual_alternating">Dual POV (Alternating)</option>
-                        <option value="single">Single POV</option>
-                        <option value="multiple">Multiple POV</option>
-                    </select>
-                    <select id="novel-tense">
-                        <option value="past">Past Tense</option>
-                        <option value="present">Present Tense</option>
-                    </select>
-                    <input type="number" id="target-chapters" value="25" min="1" max="100">
-                    <label for="target-chapters">Target Chapters</label>
-                    <input type="number" id="target-beats" value="250" min="1" max="1000">
-                    <label for="target-beats">Target Story Beats</label>
-                    <div class="integration-options">
-                        <label>
-                            <input type="checkbox" id="novel-sync-notion"> Sync to Notion
-                        </label>
-                        <label>
-                            <input type="checkbox" id="novel-sync-drive"> Upload to Google Drive
-                        </label>
-                    </div>
-                    <button type="submit">Create Novel Project</button>
-                </form>
-                <div id="novels-list"></div>
-            </div>
-
-            <div class="card">
-                <h3>Chapter Management</h3>
-                <div id="chapter-section" style="display: none;">
-                    <form id="chapter-form">
-                        <input type="hidden" id="chapter-novel-id">
-                        <input type="number" id="chapter-number" placeholder="Chapter Number" required>
-                        <input type="text" id="chapter-title" placeholder="Chapter Title" required>
-                        <input type="text" id="chapter-pov" placeholder="POV Character" required>
-                        <textarea id="chapter-summary" placeholder="Chapter Summary" rows="4"></textarea>
-                        <button type="submit">Add Chapter</button>
-                    </form>
-                    <div id="chapters-list"></div>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3>Story Beats Tracking</h3>
-                <div id="beats-section" style="display: none;">
-                    <form id="beat-form">
-                        <input type="hidden" id="beat-novel-id">
-                        <select id="beat-chapter">
-                            <option value="">Select Chapter</option>
-                        </select>
-                        <input type="number" id="beat-number" placeholder="Beat Number" required>
-                        <textarea id="beat-description" placeholder="Beat Description" rows="3" required></textarea>
-                        <select id="beat-type">
-                            <option value="setup">Setup</option>
-                            <option value="inciting_incident">Inciting Incident</option>
-                            <option value="rising_action">Rising Action</option>
-                            <option value="climax">Climax</option>
-                            <option value="falling_action">Falling Action</option>
-                            <option value="resolution">Resolution</option>
-                        </select>
-                        <input type="text" id="beat-pov" placeholder="POV Character" required>
-                        <button type="submit">Add Story Beat</button>
-                    </form>
-                    <div id="beats-list"></div>
-                </div>
-            </div>
+        <div>
+          <span class="label">Markets Healthy</span>
+          <strong id="hero-markets">0</strong>
         </div>
-
-        <!-- Integrations Section -->
-        <div id="integrations-section" class="section">
-            <h2>Integrations</h2>
-            
-            <div class="card">
-                <h3>Integration Status</h3>
-                <div id="integration-status">
-                    <div class="status-item">
-                        <span class="status-label">Supabase:</span>
-                        <span id="supabase-status" class="status-indicator">Checking...</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Notion:</span>
-                        <span id="notion-status" class="status-indicator">Checking...</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Google Drive:</span>
-                        <span id="google-drive-status" class="status-indicator">Checking...</span>
-                    </div>
-                </div>
-                <button id="refresh-status" class="btn-secondary">Refresh Status</button>
-            </div>
-
-            <div class="card">
-                <h3>Google Drive Authentication</h3>
-                <p>Connect your Google Drive account to enable file storage and document management.</p>
-                <button id="google-auth-btn" class="btn-primary">Connect Google Drive</button>
-                <div id="google-auth-status"></div>
-            </div>
-
-            <div class="card">
-                <h3>Notion Integration</h3>
-                <p>Sync your credit memos and novel projects to Notion for enhanced organization and collaboration.</p>
-                <div class="integration-info">
-                    <p><strong>Setup Instructions:</strong></p>
-                    <ol>
-                        <li>Create a Notion integration at <a href="https://www.notion.so/my-integrations" target="_blank">notion.so/my-integrations</a></li>
-                        <li>Copy your integration token to the .env file</li>
-                        <li>Create a database in Notion and copy its ID to the .env file</li>
-                    </ol>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3>Supabase Database</h3>
-                <p>Your data is automatically synced to Supabase for cloud storage and real-time updates.</p>
-                <div class="integration-info">
-                    <p><strong>Setup Instructions:</strong></p>
-                    <ol>
-                        <li>Create a Supabase project at <a href="https://supabase.com" target="_blank">supabase.com</a></li>
-                        <li>Copy your project URL and API keys to the .env file</li>
-                        <li>Run the database migration script to set up tables</li>
-                    </ol>
-                </div>
-            </div>
+        <div>
+          <span class="label">Last Refresh</span>
+          <strong id="hero-refresh">-</strong>
         </div>
-    </div>
+      </div>
+    </header>
 
-    <script src="script.js"></script>
+    <main>
+      <section class="grid">
+        <article class="card" id="market-health-card">
+          <div class="card-header">
+            <h2>Market Connectivity</h2>
+            <button class="ghost" id="refresh-markets">Refresh</button>
+          </div>
+          <div id="market-health" class="list"></div>
+        </article>
+
+        <article class="card" id="opportunities-card">
+          <div class="card-header">
+            <div>
+              <h2>Executable Opportunities</h2>
+              <p class="muted">Validated spreads that satisfy current risk thresholds.</p>
+            </div>
+            <div>
+              <label for="quantity-input" class="label">Default Qty</label>
+              <input type="number" id="quantity-input" min="1" value="5">
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Brand</th>
+                  <th>Denom</th>
+                  <th>Buy From</th>
+                  <th>Sell Into</th>
+                  <th>Net Spread (bps)</th>
+                  <th>Profit / Card</th>
+                  <th>Qty</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="opportunities-body"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card" id="books-card">
+          <div class="card-header">
+            <div>
+              <h2>Live Order Books</h2>
+              <p class="muted">Best venues per brand and denomination.</p>
+            </div>
+            <button class="ghost" id="refresh-books">Sync</button>
+          </div>
+          <div id="books-grid" class="books"></div>
+        </article>
+
+        <article class="card" id="executions-card">
+          <div class="card-header">
+            <h2>Execution Log</h2>
+            <p class="muted">Persistent audit trail for every automated or manual trade.</p>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Brand</th>
+                  <th>Qty</th>
+                  <th>Route</th>
+                  <th>Net Profit</th>
+                </tr>
+              </thead>
+              <tbody id="executions-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+  <script src="script.js"></script>
 </body>
 </html>

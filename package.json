@@ -1,7 +1,7 @@
 {
-  "name": "commodities-credit-workspace",
+  "name": "gift-card-arbitrage-platform",
   "version": "1.0.0",
-  "description": "A credit analysis workspace for commodities trading companies and novel planning tool",
+  "description": "Real-time digital gift card price tracking and zero-risk arbitrage platform",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -9,24 +9,25 @@
     "test": "echo \"No tests specified\" && exit 0"
   },
   "keywords": [
-    "credit-analysis",
-    "commodities",
-    "trading",
-    "novel-planning",
-    "workspace"
+    "gift-card",
+    "arbitrage",
+    "real-time",
+    "fintech",
+    "trading"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@notionhq/client": "^5.1.0",
-    "@supabase/supabase-js": "^2.58.0",
+    "axios": "^1.7.7",
     "body-parser": "^1.20.2",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^4.18.2",
-    "fs": "^0.0.1-security",
-    "googleapis": "^160.0.0",
-    "multer": "^1.4.5-lts.1",
-    "path": "^0.12.7",
-    "sqlite3": "^5.1.6"
+    "helmet": "^7.1.0",
+    "pino": "^9.3.1",
+    "sqlite3": "^5.1.6",
+    "uuid": "^11.0.0",
+    "zod": "^3.23.8"
   }
 }
