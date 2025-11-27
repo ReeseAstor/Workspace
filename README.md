@@ -1,145 +1,88 @@
-# Credit Analysis & Novel Planning Workspace
+# Digital Gift Card Arbitrage Platform
 
-A comprehensive workspace application that combines credit analysis tools for commodities trading companies with novel planning and story development features.
+Production-grade Node.js platform for monitoring digital gift card venues, validating zero-risk spreads, and orchestrating simultaneous buy/sell execution.
 
-## Features
+## Capabilities
+- **Market ingestion** – pluggable connectors (HTTP APIs or secure partner streams) normalize quotes for every brand/denomination.
+- **Real-time analytics** – in-memory order books + deterministic arbitrage engine evaluate every update with configurable profit, FX, and network fee buffers.
+- **Risk controls** – freshness checks, fee-aware PnL math, opportunity deduplication, and SQLite-backed audit trail for opportunities and fills.
+- **Execution workflow** – REST endpoint to trigger trades after revalidation; hooks ready for integrating reservation/settlement flows per venue.
+- **Operations dashboard** – SSE-driven control room showing market health, executable spreads, order books, and execution log (no demo data injected).
+- **Jurisdiction gating** – environment allowlists enforce US-only venues and USD-only pricing out of the box, keeping the platform compliant with domestic mandates.
 
-### Credit Analysis for Commodities Trading
-- **Company Management**: Track and manage up to 15 commodities trading companies
-- **Financial Document OCR**: Upload and process financial documents (PDF, JPG, PNG, JPEG)
-- **Credit Memo Generation**: Create various types of credit memos:
-  - Annual Review
-  - Refinancing
-  - New Deals
-  - Amendments
-- **Financial Metrics Analysis**: Store and analyze financial data for consistent peer comparison
-- **Database Storage**: All financial data and credit memos stored in SQLite database
-
-### Novel Planning & Story Development
-- **Novel Project Management**: Create and manage multiple novel projects
-- **Chapter Management**: Organize novels into chapters (targeting 25 chapters)
-- **Story Beats Tracking**: Track detailed story beats (targeting 250 beats per novel)
-- **POV Support**: Built-in support for dual POV, alternating perspective novels
-- **Tense Management**: Support for past and present tense narratives
-- **Progress Tracking**: Monitor chapter and beat completion
-
-## Screenshots
-
-### Credit Analysis Interface
-![Credit Analysis](https://github.com/user-attachments/assets/f43fa598-80b6-4711-96db-4368b32bad2d)
-
-### Novel Planning Interface
-![Novel Planning](https://github.com/user-attachments/assets/c93e654c-1e3d-4271-9d9d-50580f4a125d)
-
-### Chapter Management in Action
-![Chapter Management](https://github.com/user-attachments/assets/4dcd3180-067c-45dd-8b8b-8a0c28f8ba3c)
-
-## Technology Stack
-
-- **Backend**: Node.js with Express.js
-- **Database**: SQLite3
-- **Frontend**: HTML5, CSS3, Vanilla JavaScript
-- **File Upload**: Multer middleware
-- **OCR**: Framework ready for integration with tesseract.js or similar
-
-## Installation
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd Workspace
+## System Architecture
 ```
-
-2. Install dependencies:
-```bash
-npm install
+Market APIs/WebSockets --> Marketplace Connectors --> Kafka-like bus (EventEmitter)
+                                          |                 \
+                                          v                  \
+                               Price Cache (per brand/denom)   \
+                                          |                    --> SSE / REST
+                                          v
+                                Arbitrage Engine --> Risk Engine --> Execution Engine --> Audit Store
 ```
+- **Connectors**: `config/marketplaces.js` loads each venue from environment variables (adapter type, URL, auth token, polling interval, fees). Optional mock connectors can be enabled for local testing via `ENABLE_MOCK_MARKETS=true`.
+- **Price cache**: `src/services/priceCache.js` keeps best bids/asks per venue, purges stale quotes per `MAX_QUOTE_AGE_MS`, and emits snapshots downstream.
+- **Arbitrage engine**: deterministic IDs per `(brand, denom, buyVenue, sellVenue)` prevent duplicate work and ensure UI/API consistency.
+- **Risk engine**: applies venue fees, FX spread, and network costs, guaranteeing only truly risk-free spreads (net spread ≥ `PROFIT_THRESHOLD_BPS`).
+- **Execution engine**: re-runs risk checks at commit time, records fills in SQLite (`src/storage/sqliteStore.js`), and emits audit SSE events.
 
-3. Start the application:
-```bash
-npm start
-```
+## Getting Started
+1. Install dependencies
+   ```bash
+   npm install
+   ```
+2. Copy and edit environment variables
+   ```bash
+   cp .env.example .env
+   ```
+3. Define at least one sell-side and one buy-side marketplace by exporting `MKT_<NAME>_*` variables (examples in `.env.example`).
+4. Optional: set `ENABLE_MOCK_MARKETS=true` for local dry runs.
+5. Start the platform
+   ```bash
+   npm start
+   ```
+6. Open `http://localhost:3000` for the live dashboard.
 
-4. Open your browser and navigate to `http://localhost:3000`
+## Key Environment Flags
+| Variable | Description |
+| --- | --- |
+| `PORT` | HTTP/SSE server port (default 3000). |
+| `PROFIT_THRESHOLD_BPS` | Minimum net spread required to surface an opportunity. |
+| `MAX_QUOTE_AGE_MS` | Quotes older than this are discarded. |
+| `ALLOWED_REGIONS` | Comma-separated ISO country/region codes (default `US`). |
+| `ALLOWED_CURRENCIES` | Comma-separated ISO currency codes (default `USD`). |
+| `FX_SPREAD_BPS` / `NETWORK_FEE_BPS` | Global fee cushions added to venue fees. |
+| `MAX_CARDS_PER_TRADE` | Hard cap per execution request. |
+| `SQLITE_DB_PATH` | Audit database location. |
+| `ENABLE_MOCK_MARKETS` | Enables synthetic connectors for development only. |
 
-## Usage
+Marketplace variables follow the pattern `MKT_<IDENTIFIER>_*`. Important keys include `SIDE` (`sell`/`buy`), `URL`, `TOKEN`, `POLL_MS`, `FEE_BPS`, `SLIPPAGE_BPS`, `CURRENCY`, and `BRANDS` (comma-separated list).
 
-### Credit Analysis Workflow
+## API Surface
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/health` | Service heartbeat + current metrics. |
+| `GET` | `/api/markets` | Market connector health (latency, status). |
+| `GET` | `/api/books` | Consolidated best bids/asks per brand. |
+| `GET` | `/api/opportunities` | Current validated arbitrage opportunities. |
+| `GET` | `/api/executions` | Recent fills from SQLite audit log. |
+| `POST` | `/api/opportunities/:id/execute` | Re-validate and trigger execution for a specific spread. |
+| `GET` | `/api/stream` | Server-Sent Events feed broadcasting opportunities, market health, metrics, and execution outcomes. |
 
-1. **Add Companies**: Start by adding commodities trading companies to the system
-2. **Upload Financial Documents**: Upload financial statements, balance sheets, cash flow statements, or income statements
-3. **Generate Credit Memos**: Create comprehensive credit memos with financial metrics analysis
-4. **Peer Comparison**: Use stored data for consistent analysis across companies
+All responses are JSON; errors respond with `{ error, details }` payloads.
 
-### Novel Planning Workflow
+## Dashboard
+The SPA in `public/` subscribes to `/api/stream` and surfaces:
+- **Connectivity**: venue health, latency, and recent errors.
+- **Executable spreads**: net spread (bps), profit per card, route context, and on-click execution with user-provided quantity.
+- **Order books**: top-of-book snapshots for each configured brand/denomination pair.
+- **Execution audit**: time-stamped route + realized profit logged from SQLite.
 
-1. **Create Novel Project**: Set up a new novel with target chapters (default: 25) and story beats (default: 250)
-2. **Add Chapters**: Create individual chapters with POV character assignments and summaries
-3. **Track Story Beats**: Add detailed story beats linked to chapters with type classification
-4. **Monitor Progress**: Track completion towards your target chapter and beat counts
-
-## API Endpoints
-
-### Credit Analysis
-- `GET /api/companies` - List all companies
-- `POST /api/companies` - Add new company
-- `POST /api/upload-financial` - Upload financial document
-- `POST /api/credit-memos` - Create credit memo
-
-### Novel Planning
-- `GET /api/novels` - List all novels
-- `POST /api/novels` - Create new novel
-- `GET /api/novels/:id/chapters` - Get chapters for a novel
-- `POST /api/chapters` - Add new chapter
-- `GET /api/novels/:id/beats` - Get story beats for a novel
-- `POST /api/beats` - Add new story beat
-
-## Database Schema
-
-The application uses SQLite with the following main tables:
-- `companies` - Trading company information
-- `financial_data` - Uploaded financial documents and OCR data
-- `credit_memos` - Generated credit analysis memos
-- `novels` - Novel project details
-- `chapters` - Individual chapters with POV and summaries
-- `story_beats` - Detailed story beats with type classification
-
-## Development
-
-The application is designed to be easily extensible:
-- Add OCR libraries like tesseract.js for actual document processing
-- Integrate financial analysis libraries for automated metrics calculation
-- Add user authentication and multi-tenancy support
-- Implement export features for credit memos and novel outlines
+## Extending the Platform
+- Implement partner-specific connectors by extending `src/services/marketplaceConnectors/baseConnector.js` (e.g., add FIX/WebSocket adapters).
+- Replace SQLite with CockroachDB/PostgreSQL by adding a new store that implements `recordOpportunity`, `recordExecution`, and `getRecentExecutions`.
+- Wire the `ExecutionEngine` into actual marketplace reservation APIs; the abstraction already expects simultaneous holds and can broadcast execution status downstream.
+- Integrate messaging/alerting (PagerDuty, Slack) by subscribing to the orchestrator events in `server.js`.
 
 ## License
-
-MIT License
-
-## Cloud Integrations
-
-This app supports optional integrations with Supabase (Storage), Notion (pages for credit memos), and Google Drive (document uploads).
-
-### Setup
-
-1. Copy the env template and edit values:
-```bash
-cp .env.example .env
-```
-2. Enable desired providers by setting flags to `true`:
-   - `ENABLE_SUPABASE`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`, `SUPABASE_PUBLIC_FILES`
-   - `ENABLE_NOTION`, `NOTION_TOKEN`, `NOTION_DATABASE_ID`
-   - `ENABLE_GOOGLE_DRIVE`, `GOOGLE_APPLICATION_CREDENTIALS`, `GDRIVE_FOLDER_ID`, `GDRIVE_MAKE_PUBLIC`
-
-### Supabase
-- Create a storage bucket (default: `financial-docs`).
-- Use the Service Role key server-side only.
-
-### Notion
-- Create an internal integration and share a database with it.
-- Use the shared database ID for `NOTION_DATABASE_ID`.
-
-### Google Drive
-- Create a Google Cloud Service Account, enable Drive API.
-- Share your target Drive folder with the service account email.
-- Set `GOOGLE_APPLICATION_CREDENTIALS` to the JSON credentials file path.
+MIT

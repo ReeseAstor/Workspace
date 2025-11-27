@@ -1,35 +1,40 @@
-// Load environment variables and provide typed accessors
 require('dotenv').config();
 
-function toBool(value, defaultValue = false) {
-	if (value === undefined || value === null || value === '') return defaultValue;
-	return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
-}
-
-const config = {
-	// Feature flags
-	enableSupabase: toBool(process.env.ENABLE_SUPABASE, false),
-	enableNotion: toBool(process.env.ENABLE_NOTION, false),
-	enableGoogleDrive: toBool(process.env.ENABLE_GOOGLE_DRIVE, false),
-
-	// Server
-	port: parseInt(process.env.PORT || '3000', 10),
-
-	// Supabase
-	supabaseUrl: process.env.SUPABASE_URL,
-	supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-	supabaseBucket: process.env.SUPABASE_BUCKET || 'financial-docs',
-	supabasePublicFiles: toBool(process.env.SUPABASE_PUBLIC_FILES, true),
-
-	// Notion
-	notionToken: process.env.NOTION_TOKEN,
-	notionDatabaseId: process.env.NOTION_DATABASE_ID,
-
-	// Google Drive
-	googleCredentialsPath: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-	googleDriveFolderId: process.env.GDRIVE_FOLDER_ID,
-	googleDriveMakePublic: toBool(process.env.GDRIVE_MAKE_PUBLIC, false)
+const toBool = (value, fallback = false) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
 };
 
-module.exports = config;
+const toInt = (value, fallback) => {
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+};
 
+const toList = (value, fallback = []) => {
+  if (!value) return fallback;
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+const config = {
+  port: toInt(process.env.PORT, 3000),
+  logLevel: process.env.LOG_LEVEL || 'info',
+  logPretty: toBool(process.env.LOG_PRETTY, false),
+  allowedRegions: toList(process.env.ALLOWED_REGIONS, ['US']).map((region) => region.toUpperCase()),
+  allowedCurrencies: toList(process.env.ALLOWED_CURRENCIES, ['USD']).map((currency) => currency.toUpperCase()),
+  profitThresholdBps: toInt(process.env.PROFIT_THRESHOLD_BPS, 75),
+  maxQuoteAgeMs: toInt(process.env.MAX_QUOTE_AGE_MS, 4_500),
+  fxSpreadBps: toInt(process.env.FX_SPREAD_BPS, 15),
+  networkFeeBps: toInt(process.env.NETWORK_FEE_BPS, 10),
+  defaultCardQuantity: toInt(process.env.DEFAULT_CARD_QUANTITY, 5),
+  maxCardsPerTrade: toInt(process.env.MAX_CARDS_PER_TRADE, 25),
+  executionHoldTimeoutMs: toInt(process.env.EXECUTION_HOLD_TIMEOUT_MS, 2_500),
+  sseHeartbeatMs: toInt(process.env.SSE_HEARTBEAT_MS, 15_000),
+  maxOpportunitiesTracked: toInt(process.env.MAX_OPPORTUNITIES_TRACKED, 50),
+  sqlitePath: process.env.SQLITE_DB_PATH || './arbitrage.db',
+  enableMockMarkets: toBool(process.env.ENABLE_MOCK_MARKETS, false),
+};
+
+module.exports = Object.freeze(config);
