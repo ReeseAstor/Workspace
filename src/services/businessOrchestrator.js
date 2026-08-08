@@ -1,51 +1,24 @@
 /**
  * Business Orchestrator for 88Away LLC
- * Coordinates KDP, Affiliate Marketing, and FireCrawl Intelligence with Qwen Multi-Modal AI
+ * Coordinates KDP and Affiliate Marketing AI Agents with Qwen Multi-Modal AI
  */
 
-const EventEmitter = require('events');
+const QwenAIAgent = require('./qwenAIAgent');
 
-class BusinessOrchestrator extends EventEmitter {
-  constructor(kdpAgent, affiliateAgent, firecrawlConfig = {}) {
-    super();
+class BusinessOrchestrator {
+  constructor(kdpAgent, affiliateAgent) {
     this.kdpAgent = kdpAgent;
     this.affiliateAgent = affiliateAgent;
     
     // Initialize Qwen AI Agent with premium configuration
     this.qwenAI = new QwenAIAgent({
-      model: 'qwen-max', // Default to Qwen3.8-Max (premium)
+      model: 'qwen-max', // Default to Qwen-Max (premium)
       timeout: 120000
     });
-    
-    // Initialize FireCrawl Agent for web intelligence
-    this.firecrawl = new FireCrawlAgent(firecrawlConfig);
     
     this.insightsCache = null;
     this.lastInsightTime = null;
     this.cacheDuration = 5 * 60 * 1000; // 5 minutes
-    
-    // Setup FireCrawl event listeners
-    this._setupFireCrawlEvents();
-  }
-  
-  _setupFireCrawlEvents() {
-    if (!this.firecrawl) return;
-    
-    this.firecrawl.on('scrape_complete', (data) => {
-      console.log('[FireCrawl] Page scraped:', data.url);
-    });
-    
-    this.firecrawl.on('competitor_analysis_complete', (data) => {
-      console.log('[FireCrawl] Competitor analysis complete:', data.competitorsAnalyzed);
-    });
-    
-    this.firecrawl.on('trend_tracking_complete', (data) => {
-      console.log('[FireCrawl] Trends identified:', data.trendsIdentified);
-    });
-    
-    this.firecrawl.on('error', (error) => {
-      console.error('[FireCrawl] Error:', error.message);
-    });
   }
 
   /**
@@ -230,121 +203,7 @@ Provide:
    * Get Qwen AI usage statistics
    */
   getAIUsageStats() {
-    return {
-      qwen: this.qwenAI.getTokenStats(),
-      firecrawl: this.firecrawl ? this.firecrawl.getUsageStats() : null
-    };
-  }
-
-  /**
-   * Analyze competitors using FireCrawl
-   */
-  async analyzeCompetitors(competitorUrls) {
-    if (!this.firecrawl) {
-      throw new Error('FireCrawl agent not initialized');
-    }
-    
-    try {
-      const result = await this.firecrawl.analyzeCompetitors(competitorUrls);
-      return { success: true, ...result };
-    } catch (error) {
-      console.error('[Orchestrator] Error analyzing competitors:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Track market trends using FireCrawl
-   */
-  async trackMarketTrends(blogUrls, topic) {
-    if (!this.firecrawl) {
-      throw new Error('FireCrawl agent not initialized');
-    }
-    
-    try {
-      const result = await this.firecrawl.trackTrends(blogUrls, topic);
-      return { success: true, ...result };
-    } catch (error) {
-      console.error('[Orchestrator] Error tracking trends:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Scrape and analyze a single URL
-   */
-  async scrapeAndAnalyze(url, analysisType = 'general') {
-    if (!this.firecrawl) {
-      throw new Error('FireCrawl agent not initialized');
-    }
-    
-    try {
-      const scraped = await this.firecrawl.scrapeUrl(url);
-      
-      // Use Qwen to analyze the scraped content
-      const analysisPrompt = `
-Analyze this scraped content from ${url} for 88Away LLC business intelligence:
-
-Content Type: ${analysisType}
-Extracted Content:
-${scraped.markdown?.substring(0, 8000) || 'No content available'}
-
-Provide:
-1. Key business insights
-2. Competitive intelligence
-3. Actionable recommendations
-4. Market opportunities
-`;
-      
-      const aiAnalysis = await this.qwenAI.generateText(analysisPrompt, {
-        maxTokens: 2048
-      });
-      
-      return {
-        success: true,
-        url,
-        scrapedContent: scraped.markdown,
-        aiAnalysis: aiAnalysis.data?.text || aiAnalysis.data?.choices?.[0]?.message?.content,
-        metadata: scraped.metadata
-      };
-    } catch (error) {
-      console.error('[Orchestrator] Error scraping and analyzing:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Extract structured data from multiple URLs
-   */
-  async extractMarketData(urls, extractionPrompt, schema) {
-    if (!this.firecrawl) {
-      throw new Error('FireCrawl agent not initialized');
-    }
-    
-    try {
-      const result = await this.firecrawl.extractData(urls, extractionPrompt, schema);
-      return { success: true, ...result };
-    } catch (error) {
-      console.error('[Orchestrator] Error extracting market data:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Search and scrape relevant market information
-   */
-  async searchMarketInfo(query, options = {}) {
-    if (!this.firecrawl) {
-      throw new Error('FireCrawl agent not initialized');
-    }
-    
-    try {
-      const result = await this.firecrawl.searchAndScrape(query, options);
-      return { success: true, ...result };
-    } catch (error) {
-      console.error('[Orchestrator] Error searching market info:', error.message);
-      throw error;
-    }
+    return this.qwenAI.getTokenStats();
   }
 
   /**
@@ -475,31 +334,6 @@ Create a concise executive summary covering:
       ],
       priority: this._calculatePriority(metrics)
     };
-  }
-
-  /**
-   * Start the orchestrator (placeholder for compatibility)
-   */
-  async start() {
-    console.log('[Orchestrator] Starting business orchestrator...');
-    this.emit('orchestrator:started', { timestamp: new Date().toISOString() });
-    return Promise.resolve({ started: true });
-  }
-
-  /**
-   * Stop the orchestrator
-   */
-  async stop() {
-    console.log('[Orchestrator] Stopping business orchestrator...');
-    this.emit('orchestrator:stopped', { timestamp: new Date().toISOString() });
-    return Promise.resolve({ stopped: true });
-  }
-
-  /**
-   * Get insights (alias for generateInsights)
-   */
-  getInsights() {
-    return this.insightsCache || this._generateBasicInsights(this.getUnifiedMetrics());
   }
 }
 

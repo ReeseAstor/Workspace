@@ -22,6 +22,7 @@ htmlcov/
 *.swo
 
 # Build artifacts
+# Build outputs
 dist/
 build/
 target/
@@ -34,24 +35,18 @@ __pycache__/
 
 # Temporary files
 *.tmp
+*.swp
+*.swo
 
 # OS generated files
 .DS_Store
 Thumbs.db
 
-# Testing
-.mypy_cache/
-.pytest_cache/
-.nyc_output/
-coverage/
+# IDE specific
+.vscode/
+.idea/
 
-# Runtime data
-*.pid
-*.seed
-*.db
-*.log
-
-# Compression
+# Compressed files
 *.zip
 *.gz
 *.tar
