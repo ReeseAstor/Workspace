@@ -20,7 +20,8 @@ app.use(bodyParser.json({ limit: '50mb' })); // Increased for file uploads
 const UNPROTECTED_PATHS = new Set(['/health']);
 const AUTH_WINDOW_MS = 60_000;
 const AUTH_MAX_ATTEMPTS = 5;
-const AUTH_COMPARE_BUFFER_SIZE = 1028;
+const AUTH_MAX_CREDENTIAL_BYTES = 1024;
+const AUTH_COMPARE_BUFFER_SIZE = AUTH_MAX_CREDENTIAL_BYTES + 4;
 const authAttempts = new Map();
 
 const parseBasicAuthHeader = (header) => {
@@ -45,7 +46,7 @@ const timingSafeMatch = (expected, actual) => {
 
   const expectedValue = Buffer.from(expected, 'utf8');
   const actualValue = Buffer.from(actual, 'utf8');
-  if (expectedValue.length > AUTH_COMPARE_BUFFER_SIZE - 4 || actualValue.length > AUTH_COMPARE_BUFFER_SIZE - 4) {
+  if (expectedValue.length > AUTH_MAX_CREDENTIAL_BYTES || actualValue.length > AUTH_MAX_CREDENTIAL_BYTES) {
     return false;
   }
 
@@ -86,9 +87,6 @@ if (config.landingPageUsername && config.landingPagePassword) {
     const now = Date.now();
     const clientKey = req.ip || req.socket?.remoteAddress || 'unknown';
     const attemptState = getAuthAttemptState(clientKey, now);
-    if (attemptState.count >= AUTH_MAX_ATTEMPTS) {
-      return res.status(429).send('Too many authentication attempts');
-    }
 
     const credentials = parseBasicAuthHeader(req.headers.authorization);
     const usernameMatches = timingSafeMatch(config.landingPageUsername, credentials?.username || '');
@@ -98,6 +96,10 @@ if (config.landingPageUsername && config.landingPagePassword) {
     if (isAuthorized) {
       authAttempts.delete(clientKey);
       return next();
+    }
+
+    if (attemptState.count >= AUTH_MAX_ATTEMPTS) {
+      return res.status(429).send('Too many authentication attempts');
     }
 
     attemptState.count += 1;
