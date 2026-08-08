@@ -18,6 +18,10 @@ app.use(compression());
 app.use(bodyParser.json({ limit: '50mb' })); // Increased for file uploads
 
 const UNPROTECTED_PATHS = new Set(['/health']);
+const AUTH_WINDOW_MS = 60_000;
+const AUTH_MAX_ATTEMPTS = 5;
+const AUTH_COMPARE_BUFFER_SIZE = 1028;
+const authAttempts = new Map();
 
 const parseBasicAuthHeader = (header) => {
   if (!header || !header.startsWith('Basic ')) return null;
@@ -39,22 +43,64 @@ const parseBasicAuthHeader = (header) => {
 const timingSafeMatch = (expected, actual) => {
   if (typeof expected !== 'string' || typeof actual !== 'string') return false;
 
-  const expectedBuffer = crypto.createHash('sha256').update(expected, 'utf8').digest();
-  const actualBuffer = crypto.createHash('sha256').update(actual, 'utf8').digest();
+  const expectedValue = Buffer.from(expected, 'utf8');
+  const actualValue = Buffer.from(actual, 'utf8');
+  if (expectedValue.length > AUTH_COMPARE_BUFFER_SIZE - 4 || actualValue.length > AUTH_COMPARE_BUFFER_SIZE - 4) {
+    return false;
+  }
+
+  const expectedBuffer = Buffer.alloc(AUTH_COMPARE_BUFFER_SIZE);
+  expectedBuffer.writeUInt32BE(expectedValue.length, 0);
+  expectedValue.copy(expectedBuffer, 4);
+
+  const actualBuffer = Buffer.alloc(AUTH_COMPARE_BUFFER_SIZE);
+  actualBuffer.writeUInt32BE(actualValue.length, 0);
+  actualValue.copy(actualBuffer, 4);
 
   return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
 };
 
+const getAuthAttemptState = (key, now) => {
+  const current = authAttempts.get(key);
+  if (!current || current.expiresAt <= now) {
+    const nextState = { count: 0, expiresAt: now + AUTH_WINDOW_MS };
+    authAttempts.set(key, nextState);
+    return nextState;
+  }
+
+  return current;
+};
+
+const authAttemptJanitor = setInterval(() => {
+  const now = Date.now();
+  authAttempts.forEach((value, key) => {
+    if (value.expiresAt <= now) authAttempts.delete(key);
+  });
+}, AUTH_WINDOW_MS);
+if (authAttemptJanitor.unref) authAttemptJanitor.unref();
+
 if (config.landingPageUsername && config.landingPagePassword) {
   app.use((req, res, next) => {
     if (UNPROTECTED_PATHS.has(req.path)) return next();
+
+    const now = Date.now();
+    const clientKey = req.ip || req.socket?.remoteAddress || 'unknown';
+    const attemptState = getAuthAttemptState(clientKey, now);
+    if (attemptState.count >= AUTH_MAX_ATTEMPTS) {
+      return res.status(429).send('Too many authentication attempts');
+    }
 
     const credentials = parseBasicAuthHeader(req.headers.authorization);
     const usernameMatches = timingSafeMatch(config.landingPageUsername, credentials?.username || '');
     const passwordMatches = timingSafeMatch(config.landingPagePassword, credentials?.password || '');
     const isAuthorized = usernameMatches && passwordMatches;
 
-    if (isAuthorized) return next();
+    if (isAuthorized) {
+      authAttempts.delete(clientKey);
+      return next();
+    }
+
+    attemptState.count += 1;
 
     res.setHeader('WWW-Authenticate', 'Basic realm="Workspace", charset="UTF-8"');
     return res.status(401).send('Authentication required');
