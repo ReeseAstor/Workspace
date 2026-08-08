@@ -15,6 +15,13 @@ coverage/
 htmlcov/
 .coverage
 
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build artifacts
 # Build outputs
 dist/
 build/

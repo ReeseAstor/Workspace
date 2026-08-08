@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const bodyParser = require('body-parser');
+const path = require('path');
 
 const config = require('./config/env');
 const BusinessOrchestrator = require('./src/services/businessOrchestrator');
@@ -13,8 +14,9 @@ const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(compression());
-app.use(bodyParser.json({ limit: '1mb' }));
+app.use(bodyParser.json({ limit: '50mb' })); // Increased for file uploads
 app.use(express.static('public'));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const server = http.createServer(app);
 const orchestrator = new BusinessOrchestrator(config, logger);
@@ -24,6 +26,7 @@ orchestrator.start().catch((err) => {
   process.exit(1);
 });
 
+// SSE for real-time updates
 const sseClients = new Set();
 
 const pushEvent = (client, event, payload) => {
