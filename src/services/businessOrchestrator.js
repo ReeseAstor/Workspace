@@ -3,12 +3,20 @@
  * Coordinates KDP and Affiliate Marketing AI Agents with Qwen Multi-Modal AI
  */
 
+const EventEmitter = require('events');
+const defaultLogger = require('../logger');
+const KDPAgent = require('./kdpAgent');
+const AffiliateAgent = require('./affiliateAgent');
 const QwenAIAgent = require('./qwenAIAgent');
 
-class BusinessOrchestrator {
-  constructor(kdpAgent, affiliateAgent) {
-    this.kdpAgent = kdpAgent;
-    this.affiliateAgent = affiliateAgent;
+class BusinessOrchestrator extends EventEmitter {
+  constructor(config, loggerInstance = defaultLogger) {
+    super();
+    const baseLogger = loggerInstance || defaultLogger;
+    this.config = config;
+    this.logger = baseLogger.child({ module: 'business-orchestrator' });
+    this.kdpAgent = new KDPAgent(config, baseLogger);
+    this.affiliateAgent = new AffiliateAgent(config, baseLogger);
     
     // Initialize Qwen AI Agent with premium configuration
     this.qwenAI = new QwenAIAgent({
@@ -19,24 +27,198 @@ class BusinessOrchestrator {
     this.insightsCache = null;
     this.lastInsightTime = null;
     this.cacheDuration = 5 * 60 * 1000; // 5 minutes
+    this.alerts = [];
+    this.isRunning = false;
+
+    this._bindAgentEvents();
+  }
+
+  _bindAgentEvents() {
+    this.kdpAgent.on('book:alert', ({ book, type, timestamp }) => {
+      this._recordAlert({
+        source: 'kdp',
+        type,
+        priority: 'high',
+        message: `${book.title} changed significantly`,
+        bookAsin: book.asin,
+        timestamp,
+      });
+    });
+
+    this.kdpAgent.on('sync:error', ({ error, timestamp }) => {
+      this._recordAlert({
+        source: 'kdp',
+        type: 'sync_error',
+        priority: 'high',
+        message: error,
+        timestamp,
+      });
+    });
+
+    this.affiliateAgent.on('campaign:alert', ({ campaign, type, timestamp }) => {
+      this._recordAlert({
+        source: 'affiliate',
+        type,
+        priority: 'high',
+        message: `${campaign.name} requires attention`,
+        campaignId: campaign.id,
+        timestamp,
+      });
+    });
+
+    this.affiliateAgent.on('sync:error', ({ source, error, timestamp }) => {
+      this._recordAlert({
+        source: `affiliate:${source}`,
+        type: 'sync_error',
+        priority: 'high',
+        message: error,
+        timestamp,
+      });
+    });
+  }
+
+  _recordAlert(alert) {
+    const normalizedAlert = {
+      timestamp: alert.timestamp || Date.now(),
+      ...alert,
+    };
+    this.alerts.unshift(normalizedAlert);
+    this.alerts = this.alerts.slice(0, 100);
+    this.emit('alert', normalizedAlert);
+  }
+
+  async start() {
+    if (this.isRunning) return;
+
+    await Promise.all([
+      this.kdpAgent.start(),
+      this.affiliateAgent.start(),
+    ]);
+
+    this.isRunning = true;
+    this._refreshInsights();
+    this.emit('orchestrator:started', {
+      lastSync: this._getLastSync(),
+    });
+  }
+
+  async stop() {
+    if (!this.isRunning) return;
+
+    await Promise.all([
+      this.kdpAgent.stop(),
+      this.affiliateAgent.stop(),
+    ]);
+
+    this.isRunning = false;
+    this.emit('orchestrator:stopped', {
+      lastSync: this._getLastSync(),
+    });
+  }
+
+  _getLastSync() {
+    return Math.max(this.kdpAgent.lastSync || 0, this.affiliateAgent.lastSync || 0) || null;
+  }
+
+  _refreshInsights() {
+    const insights = this._generateBasicInsights(this.getUnifiedMetrics());
+    this.emit('insights:updated', { insights });
+    this.generateInsights()
+      .then((freshInsights) => {
+        this.emit('insights:updated', { insights: freshInsights });
+      })
+      .catch((error) => {
+        this.logger.warn({ err: error }, 'Failed to refresh AI insights');
+      });
+    return insights;
+  }
+
+  _buildKDPMetrics() {
+    const rawMetrics = this.kdpAgent.getMetrics();
+    const books = this.kdpAgent.getBooks();
+    const topPerformers = [...books]
+      .sort((left, right) => (right.totalUnits || 0) - (left.totalUnits || 0))
+      .slice(0, 5);
+
+    return {
+      metrics: rawMetrics,
+      books: {
+        totalBooks: rawMetrics.totalBooks,
+        items: books,
+      },
+      revenue: {
+        total: rawMetrics.totalRoyaltiesEarned,
+        currentMonth: rawMetrics.currentMonthRoyalties,
+      },
+      performance: {
+        averageRating: rawMetrics.averageRating,
+        totalReviews: rawMetrics.totalReviews,
+      },
+      topPerformers,
+      categories: [...new Set(books.map((book) => book.category).filter(Boolean))],
+    };
+  }
+
+  _buildAffiliateMetrics() {
+    const rawMetrics = this.affiliateAgent.getMetrics();
+    const campaigns = this.affiliateAgent.getCampaigns();
+    const networks = this.affiliateAgent.getNetworks();
+    const topNetworks = [...networks]
+      .sort((left, right) => (right.totalEarnings || 0) - (left.totalEarnings || 0))
+      .slice(0, 5);
+
+    return {
+      metrics: rawMetrics,
+      campaigns: {
+        totalCampaigns: rawMetrics.totalCampaigns,
+        activeCampaigns: rawMetrics.activeCampaigns,
+        items: campaigns,
+      },
+      revenue: {
+        total: rawMetrics.totalRevenue,
+        commission: rawMetrics.totalCommission,
+        pendingBalance: rawMetrics.pendingBalance,
+      },
+      performance: {
+        totalClicks: rawMetrics.totalClicks,
+        totalConversions: rawMetrics.totalConversions,
+        conversionRate: rawMetrics.averageConversionRate,
+        ctr: rawMetrics.averageCTR,
+        roi: rawMetrics.averageROI,
+      },
+      networks: {
+        totalNetworks: rawMetrics.totalNetworks,
+        activeNetworks: networks.filter((network) => network.status === 'active').length,
+        items: networks,
+      },
+      topNetworks,
+    };
   }
 
   /**
    * Get unified metrics from both agents
    */
   getUnifiedMetrics() {
-    const kdpMetrics = this.kdpAgent.getMetrics();
-    const affiliateMetrics = this.affiliateAgent.getMetrics();
+    const kdpMetrics = this._buildKDPMetrics();
+    const affiliateMetrics = this._buildAffiliateMetrics();
+    const totalRevenue = kdpMetrics.revenue.total + affiliateMetrics.revenue.total;
+    const lastSync = this._getLastSync();
 
     return {
       timestamp: new Date().toISOString(),
-      business: '88Away LLC',
+      business: {
+        name: '88Away LLC',
+        isHealthy: this.isRunning && kdpMetrics.metrics.isHealthy && affiliateMetrics.metrics.isHealthy,
+        lastSync,
+        totalRevenue,
+      },
       kdp: kdpMetrics,
       affiliate: affiliateMetrics,
       combined: {
-        totalRevenue: kdpMetrics.revenue.total + affiliateMetrics.revenue.total,
+        totalRevenue,
         totalItems: kdpMetrics.books.totalBooks + affiliateMetrics.campaigns.totalCampaigns,
-        activeChannels: 1 + affiliateMetrics.networks.activeNetworks
+        activeChannels: 1 + affiliateMetrics.networks.activeNetworks,
+        lastSync,
       }
     };
   }
@@ -100,6 +282,59 @@ Provide:
       console.error('[Orchestrator] Error generating AI insights:', error.message);
       return this._generateBasicInsights(metrics);
     }
+  }
+
+  getInsights() {
+    return this.insightsCache || this._generateBasicInsights(this.getUnifiedMetrics());
+  }
+
+  getAlerts(limit = 10) {
+    return this.alerts.slice(0, limit);
+  }
+
+  getKDPMetrics() {
+    return this._buildKDPMetrics();
+  }
+
+  getAllBooks() {
+    return this.kdpAgent.getBooks();
+  }
+
+  getBookByASIN(asin) {
+    return this.kdpAgent.getBookByASIN(asin);
+  }
+
+  getAffiliateMetrics() {
+    return this._buildAffiliateMetrics();
+  }
+
+  getAllCampaigns() {
+    return this.affiliateAgent.getCampaigns();
+  }
+
+  getCampaignById(id) {
+    return this.affiliateAgent.getCampaignById(id);
+  }
+
+  getAllNetworks() {
+    return this.affiliateAgent.getNetworks();
+  }
+
+  getRevenueReport(period = 'month') {
+    const metrics = this.getUnifiedMetrics();
+    const forecast = this.affiliateAgent.getCommissionForecast();
+
+    return {
+      period,
+      generatedAt: new Date().toISOString(),
+      revenue: {
+        total: metrics.combined.totalRevenue,
+        kdp: metrics.kdp.revenue.total,
+        affiliate: metrics.affiliate.revenue.total,
+      },
+      forecast,
+      business: metrics.business,
+    };
   }
 
   /**
@@ -263,31 +498,47 @@ Create a concise executive summary covering:
   /**
    * Trigger sync across all agents
    */
-  async triggerSync() {
-    console.log('[Orchestrator] Triggering sync across all agents...');
-    
-    const [kdpResult, affiliateResult] = await Promise.allSettled([
-      this.kdpAgent.syncData(),
-      this.affiliateAgent.syncData()
-    ]);
+  async triggerManualSync(source = 'all') {
+    this.logger.info({ source }, 'Triggering manual sync');
 
-    return {
-      timestamp: new Date().toISOString(),
-      kdp: kdpResult.status === 'fulfilled' ? kdpResult.value : { error: kdpResult.reason },
-      affiliate: affiliateResult.status === 'fulfilled' ? affiliateResult.value : { error: affiliateResult.reason }
-    };
+    const syncJobs = [];
+    if (source === 'all' || source === 'kdp') {
+      syncJobs.push(
+        this.kdpAgent._syncBooks().then(() => ({
+          source: 'kdp',
+          success: true,
+          lastSync: this.kdpAgent.lastSync,
+        }))
+      );
+    }
+    if (source === 'all' || source === 'affiliate') {
+      syncJobs.push(
+        Promise.all([
+          this.affiliateAgent._syncCampaigns(),
+          this.affiliateAgent._syncNetworks(),
+        ]).then(() => ({
+          source: 'affiliate',
+          success: true,
+          lastSync: this.affiliateAgent.lastSync,
+        }))
+      );
+    }
+
+    const results = await Promise.allSettled(syncJobs);
+    this._refreshInsights();
+
+    return results.map((result) => (
+      result.status === 'fulfilled'
+        ? result.value
+        : { success: false, error: result.reason?.message || String(result.reason) }
+    ));
   }
 
   /**
    * Get alerts from both agents
    */
   getRecentAlerts(limit = 10) {
-    const kdpAlerts = this.kdpAgent.getAlerts(limit);
-    const affiliateAlerts = this.affiliateAgent.getAlerts(limit);
-
-    return [...kdpAlerts, ...affiliateAlerts]
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-      .slice(0, limit);
+    return this.getAlerts(limit);
   }
 
   _extractRecommendations(aiResponse) {

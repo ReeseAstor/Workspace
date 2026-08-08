@@ -230,8 +230,13 @@ app.get('/api/reports/revenue', (req, res) => {
 });
 
 // Executive summary
-app.get('/api/executive-summary', (req, res) => {
-  res.json(orchestrator.generateExecutiveSummary());
+app.get('/api/executive-summary', async (req, res, next) => {
+  try {
+    res.json(await orchestrator.generateExecutiveSummary());
+  } catch (err) {
+    err.statusCode = 500;
+    next(err);
+  }
 });
 
 // Manual sync trigger
