@@ -61,6 +61,13 @@ const timingSafeMatch = (expected, actual) => {
   return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
 };
 
+const isAuthorizedRequest = (req) => {
+  const credentials = parseBasicAuthHeader(req.headers.authorization);
+  const usernameMatches = timingSafeMatch(config.landingPageUsername, credentials?.username || '');
+  const passwordMatches = timingSafeMatch(config.landingPagePassword, credentials?.password || '');
+  return usernameMatches && passwordMatches;
+};
+
 if (config.landingPageUsername && config.landingPagePassword) {
   const authRateLimiter = rateLimit({
     windowMs: AUTH_WINDOW_MS,
@@ -68,7 +75,7 @@ if (config.landingPageUsername && config.landingPagePassword) {
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: true,
-    skip: (req) => UNPROTECTED_PATHS.has(req.path),
+    skip: (req) => UNPROTECTED_PATHS.has(req.path) || isAuthorizedRequest(req),
     message: 'Too many authentication attempts',
   });
 
@@ -76,10 +83,7 @@ if (config.landingPageUsername && config.landingPagePassword) {
   app.use((req, res, next) => {
     if (UNPROTECTED_PATHS.has(req.path)) return next();
 
-    const credentials = parseBasicAuthHeader(req.headers.authorization);
-    const usernameMatches = timingSafeMatch(config.landingPageUsername, credentials?.username || '');
-    const passwordMatches = timingSafeMatch(config.landingPagePassword, credentials?.password || '');
-    const isAuthorized = usernameMatches && passwordMatches;
+    const isAuthorized = isAuthorizedRequest(req);
 
     if (isAuthorized) return next();
 
