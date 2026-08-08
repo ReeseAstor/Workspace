@@ -6,7 +6,7 @@ const compression = require('compression');
 const bodyParser = require('body-parser');
 
 const config = require('./config/env');
-const GiftCardOrchestrator = require('./src/services/orchestrator');
+const BusinessOrchestrator = require('./src/services/businessOrchestrator');
 const logger = require('./src/logger');
 
 const app = express();
@@ -17,10 +17,10 @@ app.use(bodyParser.json({ limit: '1mb' }));
 app.use(express.static('public'));
 
 const server = http.createServer(app);
-const orchestrator = new GiftCardOrchestrator();
+const orchestrator = new BusinessOrchestrator(config, logger);
 
 orchestrator.start().catch((err) => {
-  logger.error({ err }, 'Failed to start orchestrator');
+  logger.error({ err }, 'Failed to start business orchestrator');
   process.exit(1);
 });
 
@@ -45,9 +45,12 @@ app.get('/api/stream', (req, res) => {
 
   const client = { res };
   sseClients.add(client);
-  pushEvent(client, 'opportunities', orchestrator.getOpportunities());
-  pushEvent(client, 'marketHealth', orchestrator.getMarketHealth());
-  pushEvent(client, 'metrics', orchestrator.getMetrics());
+  
+  // Send initial state
+  const metrics = orchestrator.getUnifiedMetrics();
+  pushEvent(client, 'metrics', metrics);
+  pushEvent(client, 'insights', orchestrator.getInsights());
+  pushEvent(client, 'alerts', orchestrator.getAlerts(10));
 
   req.on('close', () => {
     sseClients.delete(client);
@@ -59,68 +62,121 @@ const heartbeat = setInterval(() => {
 }, config.sseHeartbeatMs);
 if (heartbeat.unref) heartbeat.unref();
 
-orchestrator.on('opportunities', (data) => {
-  broadcast('opportunities', data);
-  broadcast('metrics', orchestrator.getMetrics());
+// Event listeners for real-time updates
+orchestrator.on('alert', (alert) => {
+  broadcast('alert', alert);
 });
-orchestrator.on('market:health', (data) => {
-  broadcast('marketHealth', data);
-  broadcast('metrics', orchestrator.getMetrics());
+
+orchestrator.on('insights:updated', (data) => {
+  broadcast('insights', data.insights);
+  broadcast('metrics', orchestrator.getUnifiedMetrics());
 });
-orchestrator.on('execution', (data) => {
-  broadcast('execution', data);
-  broadcast('metrics', orchestrator.getMetrics());
+
+orchestrator.on('orchestrator:started', (data) => {
+  broadcast('status', { status: 'running', ...data });
+});
+
+orchestrator.on('orchestrator:stopped', (data) => {
+  broadcast('status', { status: 'stopped', ...data });
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', metrics: orchestrator.getMetrics() });
+  const metrics = orchestrator.getUnifiedMetrics();
+  res.json({ 
+    status: 'ok', 
+    business: '88Away LLC',
+    running: metrics.business.isHealthy,
+    lastSync: metrics.business.lastSync,
+  });
 });
 
-app.get('/api/markets', (req, res) => {
-  res.json(orchestrator.getMarketHealth());
-});
-
-app.get('/api/books', (req, res) => {
-  res.json(orchestrator.getOrderBooks());
-});
-
-app.get('/api/opportunities', (req, res) => {
-  res.json(orchestrator.getOpportunities());
-});
-
+// Unified metrics endpoint
 app.get('/api/metrics', (req, res) => {
-  res.json(orchestrator.getMetrics());
+  res.json(orchestrator.getUnifiedMetrics());
 });
 
-app.get('/api/executions', async (req, res, next) => {
-  try {
-    const executions = await orchestrator.getRecentExecutions();
-    res.json(executions);
-  } catch (err) {
-    next(err);
+// KDP-specific endpoints
+app.get('/api/kdp/metrics', (req, res) => {
+  res.json(orchestrator.getKDPMetrics());
+});
+
+app.get('/api/kdp/books', (req, res) => {
+  res.json(orchestrator.getAllBooks());
+});
+
+app.get('/api/kdp/books/:asin', (req, res) => {
+  const book = orchestrator.getBookByASIN(req.params.asin);
+  if (!book) {
+    return res.status(404).json({ error: 'Book not found' });
   }
+  res.json(book);
 });
 
-app.post('/api/opportunities/:id/execute', async (req, res, next) => {
+// Affiliate-specific endpoints
+app.get('/api/affiliate/metrics', (req, res) => {
+  res.json(orchestrator.getAffiliateMetrics());
+});
+
+app.get('/api/affiliate/campaigns', (req, res) => {
+  res.json(orchestrator.getAllCampaigns());
+});
+
+app.get('/api/affiliate/campaigns/:id', (req, res) => {
+  const campaign = orchestrator.getCampaignById(req.params.id);
+  if (!campaign) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
+  res.json(campaign);
+});
+
+app.get('/api/affiliate/networks', (req, res) => {
+  res.json(orchestrator.getAllNetworks());
+});
+
+// Insights and alerts
+app.get('/api/insights', (req, res) => {
+  res.json(orchestrator.getInsights());
+});
+
+app.get('/api/alerts', (req, res) => {
+  const limit = parseInt(req.query.limit) || 20;
+  res.json(orchestrator.getAlerts(limit));
+});
+
+// Revenue reports
+app.get('/api/reports/revenue', (req, res) => {
+  const period = req.query.period || 'month';
+  res.json(orchestrator.getRevenueReport(period));
+});
+
+// Executive summary
+app.get('/api/executive-summary', (req, res) => {
+  res.json(orchestrator.generateExecutiveSummary());
+});
+
+// Manual sync trigger
+app.post('/api/sync', async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const { quantity } = req.body || {};
-    const result = await orchestrator.executeOpportunity(id, quantity);
-    res.json({ success: true, execution: result });
+    const source = req.query.source || 'all';
+    const results = await orchestrator.triggerManualSync(source);
+    res.json({ success: true, results });
   } catch (err) {
-    err.statusCode = 400;
+    err.statusCode = 500;
     next(err);
   }
 });
 
 app.use((err, req, res, _next) => {
   logger.error({ err, path: req.path }, 'Request failed');
-  res.status(err.statusCode || 500).json({ error: err.message || 'Internal Server Error', details: err.issues });
+  res.status(err.statusCode || 500).json({ 
+    error: err.message || 'Internal Server Error',
+    business: '88Away LLC',
+  });
 });
 
 const PORT = config.port;
 server.listen(PORT, () => {
-  logger.info({ port: PORT }, 'Gift card arbitrage platform listening');
+  logger.info({ port: PORT }, '88Away LLC AI Premium Agent Platform listening');
 });
 
 process.on('SIGINT', async () => {
