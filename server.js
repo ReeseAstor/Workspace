@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const bodyParser = require('body-parser');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const config = require('./config/env');
@@ -22,7 +23,6 @@ const AUTH_WINDOW_MS = 60_000;
 const AUTH_MAX_ATTEMPTS = 5;
 const AUTH_MAX_CREDENTIAL_BYTES = 1024;
 const AUTH_COMPARE_BUFFER_SIZE = AUTH_MAX_CREDENTIAL_BYTES + 4;
-const authAttempts = new Map();
 
 const parseBasicAuthHeader = (header) => {
   if (!header || !header.startsWith('Basic ')) return null;
@@ -61,48 +61,27 @@ const timingSafeMatch = (expected, actual) => {
   return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
 };
 
-const getAuthAttemptState = (key, now) => {
-  const current = authAttempts.get(key);
-  if (!current || current.expiresAt <= now) {
-    const nextState = { count: 0, expiresAt: now + AUTH_WINDOW_MS };
-    authAttempts.set(key, nextState);
-    return nextState;
-  }
-
-  return current;
-};
-
-const authAttemptJanitor = setInterval(() => {
-  const now = Date.now();
-  authAttempts.forEach((value, key) => {
-    if (value.expiresAt <= now) authAttempts.delete(key);
-  });
-}, AUTH_WINDOW_MS);
-if (authAttemptJanitor.unref) authAttemptJanitor.unref();
-
 if (config.landingPageUsername && config.landingPagePassword) {
+  const authRateLimiter = rateLimit({
+    windowMs: AUTH_WINDOW_MS,
+    limit: AUTH_MAX_ATTEMPTS,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    skip: (req) => UNPROTECTED_PATHS.has(req.path),
+    message: 'Too many authentication attempts',
+  });
+
+  app.use(authRateLimiter);
   app.use((req, res, next) => {
     if (UNPROTECTED_PATHS.has(req.path)) return next();
-
-    const now = Date.now();
-    const clientKey = req.ip || req.socket?.remoteAddress || 'unknown';
-    const attemptState = getAuthAttemptState(clientKey, now);
 
     const credentials = parseBasicAuthHeader(req.headers.authorization);
     const usernameMatches = timingSafeMatch(config.landingPageUsername, credentials?.username || '');
     const passwordMatches = timingSafeMatch(config.landingPagePassword, credentials?.password || '');
     const isAuthorized = usernameMatches && passwordMatches;
 
-    if (isAuthorized) {
-      authAttempts.delete(clientKey);
-      return next();
-    }
-
-    if (attemptState.count >= AUTH_MAX_ATTEMPTS) {
-      return res.status(429).send('Too many authentication attempts');
-    }
-
-    attemptState.count += 1;
+    if (isAuthorized) return next();
 
     res.setHeader('WWW-Authenticate', 'Basic realm="Workspace", charset="UTF-8"');
     return res.status(401).send('Authentication required');
