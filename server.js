@@ -37,14 +37,13 @@ const parseBasicAuthHeader = (header) => {
 const timingSafeMatch = (expected, actual) => {
   if (typeof expected !== 'string' || typeof actual !== 'string') return false;
 
-  const expectedBuffer = Buffer.from(expected, 'utf8');
-  const actualBuffer = Buffer.from(actual, 'utf8');
-  if (expectedBuffer.length !== actualBuffer.length) return false;
+  const expectedBuffer = crypto.createHash('sha256').update(expected, 'utf8').digest();
+  const actualBuffer = crypto.createHash('sha256').update(actual, 'utf8').digest();
 
   return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
 };
 
-if (config.landingPagePassword) {
+if (config.landingPageUsername && config.landingPagePassword) {
   app.use((req, res, next) => {
     if (req.path === '/health') return next();
 
