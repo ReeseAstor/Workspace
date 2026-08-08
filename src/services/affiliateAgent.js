@@ -49,6 +49,10 @@ class AffiliateAgent extends EventEmitter {
     this.logger.info('Affiliate Agent stopped');
   }
 
+  async syncData() {
+    await this._syncAll();
+  }
+
   async _syncAll() {
     await Promise.all([
       this._syncCampaigns(),

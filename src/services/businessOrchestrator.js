@@ -79,8 +79,8 @@ class BusinessOrchestrator extends EventEmitter {
 
   _recordAlert(alert) {
     const normalizedAlert = {
-      timestamp: alert.timestamp || Date.now(),
       ...alert,
+      timestamp: alert.timestamp || Date.now(),
     };
     this.alerts.unshift(normalizedAlert);
     this.alerts = this.alerts.slice(0, 100);
@@ -504,7 +504,7 @@ Create a concise executive summary covering:
     const syncJobs = [];
     if (source === 'all' || source === 'kdp') {
       syncJobs.push(
-        this.kdpAgent._syncBooks().then(() => ({
+        this.kdpAgent.syncData().then(() => ({
           source: 'kdp',
           success: true,
           lastSync: this.kdpAgent.lastSync,
@@ -513,10 +513,7 @@ Create a concise executive summary covering:
     }
     if (source === 'all' || source === 'affiliate') {
       syncJobs.push(
-        Promise.all([
-          this.affiliateAgent._syncCampaigns(),
-          this.affiliateAgent._syncNetworks(),
-        ]).then(() => ({
+        this.affiliateAgent.syncData().then(() => ({
           source: 'affiliate',
           success: true,
           lastSync: this.affiliateAgent.lastSync,

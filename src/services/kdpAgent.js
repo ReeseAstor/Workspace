@@ -47,6 +47,10 @@ class KDPAgent extends EventEmitter {
     this.logger.info('KDP Agent stopped');
   }
 
+  async syncData() {
+    await this._syncBooks();
+  }
+
   async _syncBooks() {
     try {
       this.logger.debug('Syncing KDP books...');
