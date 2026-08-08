@@ -35,6 +35,7 @@ Market APIs/WebSockets --> Marketplace Connectors --> Kafka-like bus (EventEmitt
    ```bash
    cp .env.example .env
    ```
+   Set `LANDING_PAGE_PASSWORD` if you want the dashboard and API protected by HTTP Basic authentication.
 3. Define at least one sell-side and one buy-side marketplace by exporting `MKT_<NAME>_*` variables (examples in `.env.example`).
 4. Optional: set `ENABLE_MOCK_MARKETS=true` for local dry runs.
 5. Start the platform
@@ -47,6 +48,7 @@ Market APIs/WebSockets --> Marketplace Connectors --> Kafka-like bus (EventEmitt
 | Variable | Description |
 | --- | --- |
 | `PORT` | HTTP/SSE server port (default 3000). |
+| `LANDING_PAGE_USERNAME` / `LANDING_PAGE_PASSWORD` | Optional HTTP Basic Auth credentials for the dashboard and API. When a password is set, all routes except `/health` require authentication. |
 | `PROFIT_THRESHOLD_BPS` | Minimum net spread required to surface an opportunity. |
 | `MAX_QUOTE_AGE_MS` | Quotes older than this are discarded. |
 | `ALLOWED_REGIONS` | Comma-separated ISO country/region codes (default `US`). |

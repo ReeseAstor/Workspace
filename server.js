@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const crypto = require('crypto');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
@@ -15,6 +16,50 @@ app.use(helmet());
 app.use(cors());
 app.use(compression());
 app.use(bodyParser.json({ limit: '50mb' })); // Increased for file uploads
+
+const parseBasicAuthHeader = (header) => {
+  if (!header || !header.startsWith('Basic ')) return null;
+
+  try {
+    const decoded = Buffer.from(header.slice(6), 'base64').toString('utf8');
+    const separatorIndex = decoded.indexOf(':');
+    if (separatorIndex === -1) return null;
+
+    return {
+      username: decoded.slice(0, separatorIndex),
+      password: decoded.slice(separatorIndex + 1),
+    };
+  } catch (_err) {
+    return null;
+  }
+};
+
+const timingSafeMatch = (expected, actual) => {
+  if (typeof expected !== 'string' || typeof actual !== 'string') return false;
+
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+  const actualBuffer = Buffer.from(actual, 'utf8');
+  if (expectedBuffer.length !== actualBuffer.length) return false;
+
+  return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+};
+
+if (config.landingPagePassword) {
+  app.use((req, res, next) => {
+    if (req.path === '/health') return next();
+
+    const credentials = parseBasicAuthHeader(req.headers.authorization);
+    const isAuthorized =
+      timingSafeMatch(config.landingPageUsername, credentials?.username || '') &&
+      timingSafeMatch(config.landingPagePassword, credentials?.password || '');
+
+    if (isAuthorized) return next();
+
+    res.setHeader('WWW-Authenticate', 'Basic realm="Workspace", charset="UTF-8"');
+    return res.status(401).send('Authentication required');
+  });
+}
+
 app.use(express.static('public'));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
