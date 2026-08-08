@@ -2,6 +2,113 @@ class RiskEngine {
   constructor(config, logger) {
     this.config = config;
     this.logger = logger.child({ module: 'risk-engine' });
+    this.dailyStats = {
+      executions: 0,
+      notional: 0,
+      pnl: 0,
+      lastReset: Date.now(),
+    };
+    this.brandPositions = new Map();
+    this.lastLossTime = null;
+  }
+
+  _resetDailyStatsIfNeeded() {
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    if (now - this.dailyStats.lastReset > dayMs) {
+      this.dailyStats = { executions: 0, notional: 0, pnl: 0, lastReset: now };
+      this.brandPositions.clear();
+      this.logger.info('Daily portfolio stats reset');
+    }
+  }
+
+  _isInCooldown() {
+    if (!this.lastLossTime) return false;
+    const now = Date.now();
+    return now - this.lastLossTime < this.config.cooldownAfterLossMs;
+  }
+
+  _updateBrandPosition(brand, quantity, price) {
+    const existing = this.brandPositions.get(brand) || { units: 0, exposure: 0 };
+    existing.units += quantity;
+    existing.exposure += quantity * price;
+    this.brandPositions.set(brand, existing);
+  }
+
+  checkPortfolioLimits(execution) {
+    this._resetDailyStatsIfNeeded();
+
+    const issues = [];
+    const notional = execution.quantity * execution.buyCost;
+
+    if (this.dailyStats.executions >= this.config.maxDailyExecutions) {
+      issues.push('daily_execution_limit_reached');
+    }
+
+    if (this.dailyStats.notional + notional > this.config.maxDailyNotional) {
+      issues.push('daily_notional_limit_reached');
+    }
+
+    if (this.dailyStats.pnl < -this.config.maxLossPerDay) {
+      issues.push('daily_loss_limit_reached');
+    }
+
+    if (this._isInCooldown()) {
+      issues.push('in_cooldown_after_loss');
+    }
+
+    const brandPosition = this.brandPositions.get(execution.brand) || { units: 0, exposure: 0 };
+    if (brandPosition.units + execution.quantity > this.config.maxPositionPerBrand) {
+      issues.push('brand_position_limit_reached');
+    }
+
+    let totalExposure = 0;
+    this.brandPositions.forEach((pos) => {
+      totalExposure += pos.exposure;
+    });
+    if (totalExposure + notional > this.config.maxTotalExposure) {
+      issues.push('total_exposure_limit_reached');
+    }
+
+    return {
+      approved: issues.length === 0,
+      issues,
+      currentStats: { ...this.dailyStats },
+      brandPosition,
+    };
+  }
+
+  recordExecutionResult(execution) {
+    this._resetDailyStatsIfNeeded();
+    this.dailyStats.executions += 1;
+    this.dailyStats.notional += execution.quantity * execution.buyCost;
+    this.dailyStats.pnl += execution.netProfitTotal;
+
+    this._updateBrandPosition(execution.brand, execution.quantity, execution.buyCost);
+
+    if (execution.netProfitTotal < 0) {
+      this.lastLossTime = Date.now();
+      this.logger.warn({ execution, dailyPnl: this.dailyStats.pnl }, 'Loss recorded, entering cooldown');
+    }
+  }
+
+  getPortfolioStats() {
+    this._resetDailyStatsIfNeeded();
+    const totalExposure = Array.from(this.brandPositions.values()).reduce(
+      (sum, pos) => sum + pos.exposure,
+      0
+    );
+
+    return {
+      daily: { ...this.dailyStats },
+      brandPositions: Array.from(this.brandPositions.entries()).map(([brand, pos]) => ({
+        brand,
+        ...pos,
+      })),
+      totalExposure,
+      inCooldown: this._isInCooldown(),
+      lastLossTime: this.lastLossTime,
+    };
   }
 
   _bpsToMultiplier(bps) {
