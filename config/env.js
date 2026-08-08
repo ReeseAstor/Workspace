@@ -35,6 +35,17 @@ const config = {
   maxOpportunitiesTracked: toInt(process.env.MAX_OPPORTUNITIES_TRACKED, 50),
   sqlitePath: process.env.SQLITE_DB_PATH || './arbitrage.db',
   enableMockMarkets: toBool(process.env.ENABLE_MOCK_MARKETS, false),
+  
+  // Portfolio-level risk controls
+  maxDailyExecutions: toInt(process.env.MAX_DAILY_EXECUTIONS, 100),
+  maxDailyNotional: toInt(process.env.MAX_DAILY_NOTIONAL, 50000),
+  maxPositionPerBrand: toInt(process.env.MAX_POSITION_PER_BRAND, 500),
+  maxTotalExposure: toInt(process.env.MAX_TOTAL_EXPOSURE, 100000),
+  maxLossPerDay: toInt(process.env.MAX_LOSS_PER_DAY, 5000),
+  cooldownAfterLossMs: toInt(process.env.COOLDOWN_AFTER_LOSS_MS, 300000),
+  
+  // Optimistic locking
+  executionLockTimeoutMs: toInt(process.env.EXECUTION_LOCK_TIMEOUT_MS, 5000),
 };
 
 module.exports = Object.freeze(config);
