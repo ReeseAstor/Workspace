@@ -17,6 +17,8 @@ app.use(cors());
 app.use(compression());
 app.use(bodyParser.json({ limit: '50mb' })); // Increased for file uploads
 
+const UNPROTECTED_PATHS = new Set(['/health']);
+
 const parseBasicAuthHeader = (header) => {
   if (!header || !header.startsWith('Basic ')) return null;
 
@@ -45,12 +47,12 @@ const timingSafeMatch = (expected, actual) => {
 
 if (config.landingPageUsername && config.landingPagePassword) {
   app.use((req, res, next) => {
-    if (req.path === '/health') return next();
+    if (UNPROTECTED_PATHS.has(req.path)) return next();
 
     const credentials = parseBasicAuthHeader(req.headers.authorization);
-    const isAuthorized =
-      timingSafeMatch(config.landingPageUsername, credentials?.username || '') &&
-      timingSafeMatch(config.landingPagePassword, credentials?.password || '');
+    const usernameMatches = timingSafeMatch(config.landingPageUsername, credentials?.username || '');
+    const passwordMatches = timingSafeMatch(config.landingPagePassword, credentials?.password || '');
+    const isAuthorized = usernameMatches && passwordMatches;
 
     if (isAuthorized) return next();
 

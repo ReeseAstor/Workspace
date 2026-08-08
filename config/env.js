@@ -18,12 +18,18 @@ const toList = (value, fallback = []) => {
     .filter(Boolean);
 };
 
+const toOptionalString = (value) => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
+
 const config = {
   port: toInt(process.env.PORT, 3000),
   logLevel: process.env.LOG_LEVEL || 'info',
   logPretty: toBool(process.env.LOG_PRETTY, false),
-  landingPageUsername: process.env.LANDING_PAGE_USERNAME || undefined,
-  landingPagePassword: process.env.LANDING_PAGE_PASSWORD || undefined,
+  landingPageUsername: toOptionalString(process.env.LANDING_PAGE_USERNAME),
+  landingPagePassword: toOptionalString(process.env.LANDING_PAGE_PASSWORD),
   allowedRegions: toList(process.env.ALLOWED_REGIONS, ['US']).map((region) => region.toUpperCase()),
   allowedCurrencies: toList(process.env.ALLOWED_CURRENCIES, ['USD']).map((currency) => currency.toUpperCase()),
   profitThresholdBps: toInt(process.env.PROFIT_THRESHOLD_BPS, 75),
